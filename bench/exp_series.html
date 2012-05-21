@@ -7,6 +7,7 @@
     <!--[if lte IE 8]><script language="javascript" type="text/javascript" src="excanvas.min.js"></script><![endif]-->
     <script language="javascript" type="text/javascript" src="jquery.js"></script>
     <script language="javascript" type="text/javascript" src="jquery.flot.js"></script>
+    <script language="javascript" type="text/javascript" src="exp_series_array_slow_c.js"></script>
     <script language="javascript" type="text/javascript" src="exp_series_suite_insert_one_c.js"></script>
     <script language="javascript" type="text/javascript" src="exp_series_suite_insert_one_ruby.js"></script>
     <script language="javascript" type="text/javascript" src="exp_series_suite_insert_many_c.js"></script>
@@ -80,6 +81,7 @@
     <script type="text/javascript">
 
     suite = [
+        exp_series_array_slow_c,
         exp_series_suite_insert_one_c,
         exp_series_suite_insert_one_ruby,
         exp_series_suite_insert_many_c,
@@ -146,8 +148,8 @@ $(function () {
     var graph = [
         [ '#array_slow', 'array_size_fixnum slow versus hash_size_fixnum insert one C', '', 12, 'generator',
             [
-                { x:'exp2', y:'user_ops', generator:'array_size_fixnum', operation:'insert', mode:'c', tag:'suite_insert_one', status:'OK' },
-                { x:'exp2', y:'user_ops', generator:'hash_size_fixnum', operation:'insert', mode:'c', tag:'suite_insert_one', status:'OK' }
+                { x:'exp2', y:'user_ops', generator:'array_size_fixnum', operation:'insert', mode:'c', tag:'array_slow', status:'OK' },
+                { x:'exp2', y:'user_ops', generator:'hash_size_fixnum', operation:'insert', mode:'c', tag:'array_slow', status:'OK' }
             ],
             'Array insertion is significantly slower than hash insertion.  ' +
             'Investigation shows that there is an extra malloc/free for each array index key.  '
@@ -155,35 +157,35 @@ $(function () {
         [ '#array_slow', 'array_size_fixnum fast versus slow insert one C', '', 12, 'tag',
             [
                 { x:'exp2', y:'user_ops', generator:'array_size_fixnum', operation:'insert', mode:'c', tag:'array_fast', status:'OK' },
-                { x:'exp2', y:'user_ops', generator:'array_size_fixnum', operation:'insert', mode:'c', tag:'suite_insert_one', status:'OK' }
+                { x:'exp2', y:'user_ops', generator:'array_size_fixnum', operation:'insert', mode:'c', tag:'array_slow', status:'OK' }
             ],
             'Pending: Array insertion is now faster.'
         ],
         [ '#array_slow', 'array_size_fixnum fast versus hash_size_fixnum insert one C', '', 12, 'generator',
             [
                 { x:'exp2', y:'user_ops', generator:'array_size_fixnum', operation:'insert', mode:'c', tag:'array_fast', status:'OK' },
-                { x:'exp2', y:'user_ops', generator:'hash_size_fixnum', operation:'insert', mode:'c', tag:'suite_insert_one', status:'OK' }
+                { x:'exp2', y:'user_ops', generator:'hash_size_fixnum', operation:'insert', mode:'c', tag:'array_slow', status:'OK' }
             ],
             'Pending: Array insertion is now as fast as hash insertion.'
         ],
         [ '#array_slow', 'array_nest_fixnum slow versus hash_nest_fixnum insert one C base 2', '', 12, 'generator',
             [
-                { x:'exp2', y:'user_ops', generator:'array_nest_fixnum', operation:'insert', mode:'c', tag:'suite_insert_one', base:2, status:'OK' },
-                { x:'exp2', y:'user_ops', generator:'hash_nest_fixnum', operation:'insert', mode:'c', tag:'suite_insert_one', base:2, status:'OK' }
+                { x:'exp2', y:'user_ops', generator:'array_nest_fixnum', operation:'insert', mode:'c', tag:'array_slow', base:2, status:'OK' },
+                { x:'exp2', y:'user_ops', generator:'hash_nest_fixnum', operation:'insert', mode:'c', tag:'array_slow', base:2, status:'OK' }
             ],
             'Nested array insertion is significantly slower than nested hash insertion.'
         ],
         [ '#array_slow', 'array_nest_fixnum fast versus slow insert one C base 2', 'hidden', 12, 'tag',
             [
                 { x:'exp2', y:'user_ops', generator:'array_nest_fixnum', operation:'insert', mode:'c', tag:'array_fast', base:2 , status:'OK' },
-                { x:'exp2', y:'user_ops', generator:'array_nest_fixnum', operation:'insert', mode:'c', tag:'suite_insert_one', base:2, status:'OK' }
+                { x:'exp2', y:'user_ops', generator:'array_nest_fixnum', operation:'insert', mode:'c', tag:'array_slow', base:2, status:'OK' }
             ],
             'Pending: Nested array insertion is now faster.'
         ],
         [ '#array_slow', 'array_nest_fixnum fast versus hash_nest_fixnum insert one C base 2', 'hidden', 12, 'generator',
             [
                 { x:'exp2', y:'user_ops', generator:'array_nest_fixnum', operation:'insert', mode:'c', tag:'array_fast', base:2 , status:'OK' },
-                { x:'exp2', y:'user_ops', generator:'hash_nest_fixnum', operation:'insert', mode:'c', tag:'suite_insert_one', base:2, status:'OK' }
+                { x:'exp2', y:'user_ops', generator:'hash_nest_fixnum', operation:'insert', mode:'c', tag:'array_slow', base:2, status:'OK' }
             ],
             'Pending: Nested array insertion is now as fast as nested hash insertion.'
         ],
