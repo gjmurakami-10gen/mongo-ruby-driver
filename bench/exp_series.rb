@@ -374,7 +374,7 @@ class TestExpPerformance < Test::Unit::TestCase
     # just setup/teardown for options parsing and sys_info
   end
 
-  def test_array_fast
+  def test_array
     [
         [2, (0..14), (-1..-1), :array_size_fixnum, :null_setup, :insert, :default_teardown],
         [2, (0..17), (-1..-1), :hash_size_fixnum, :null_setup, :insert, :default_teardown],
