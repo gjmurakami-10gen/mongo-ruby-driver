@@ -21,6 +21,7 @@
  */
 
 #include "ruby.h"
+#include "version.h"
 
 /* Ensure compatibility with early releases of Ruby 1.8.5 */
 #ifndef RSTRING_PTR
@@ -115,7 +116,7 @@ static int max_bson_size;
 #endif
 
 static void write_utf8(bson_buffer_t buffer, VALUE string, char check_null) {
-    result_t status = check_string(RSTRING_PTR(string), RSTRING_LEN(string),
+    result_t status = check_string(RSTRING_PTR(string), (int)RSTRING_LEN(string),
                                    1, check_null);
     if (status == HAS_NULL) {
         bson_buffer_free(buffer);
@@ -125,7 +126,7 @@ static void write_utf8(bson_buffer_t buffer, VALUE string, char check_null) {
         rb_raise(InvalidStringEncoding, "String not valid UTF-8");
     }
     string = TO_UTF8(string);
-    SAFE_WRITE(buffer, RSTRING_PTR(string), RSTRING_LEN(string));
+    SAFE_WRITE(buffer, RSTRING_PTR(string), (int)RSTRING_LEN(string));
 }
 
 // this sucks. but for some reason these moved around between 1.8 and 1.9
@@ -139,38 +140,14 @@ static void write_utf8(bson_buffer_t buffer, VALUE string, char check_null) {
 #define EXTENDED RE_OPTION_EXTENDED
 #endif
 
-/* TODO we ought to check that the malloc or asprintf was successful
- * and raise an exception if not. */
-/* TODO maybe we can use something more portable like vsnprintf instead
- * of this hack. And share it with the Python extension ;) */
-/* If we don't have ASPRINTF, there are two possibilities:
- * either use _scprintf and _snprintf on for Windows or
- * use snprintf for solaris. */
-#ifndef HAVE_ASPRINTF
+#define ARRAY_KEY_BUFFER_SIZE 10
+// use 8^(ARRAY_KEY_BUFFER_SIZE-1) as CPP safe bounds approximation for limit of 10^(ARRAY_KEY_BUFFER_SIZE-1)-1
+#define ARRAY_KEY_MAX_CPP (1 << (3 * (ARRAY_KEY_BUFFER_SIZE-1)))
+
 #ifdef _WIN32 || _MSC_VER
-#define INT2STRING(buffer, i)                   \
-    {                                           \
-        int vslength = _scprintf("%d", i) + 1;  \
-        *buffer = malloc(vslength);             \
-        _snprintf(*buffer, vslength, "%d", i);  \
-    }
-#define FREE_INTSTRING(buffer) free(buffer)
+#define SNPRINTF _snprintf
 #else
-#define INT2STRING(buffer, i)                   \
-    {                                           \
-        int vslength = snprintf(NULL, 0, "%d", i) + 1;  \
-        *buffer = malloc(vslength);             \
-        snprintf(*buffer, vslength, "%d", i);   \
-    }
-#define FREE_INTSTRING(buffer) free(buffer)
-#endif
-#else
-#define INT2STRING(buffer, i) asprintf(buffer, "%d", i);
-#ifdef USING_SYSTEM_ALLOCATOR_LIBRARY /* Ruby Enterprise Edition with tcmalloc */
-#define FREE_INTSTRING(buffer) system_free(buffer)
-#else
-#define FREE_INTSTRING(buffer) free(buffer)
-#endif
+#define SNPRINTF snprintf
 #endif
 
 #ifndef RREGEXP_SRC
@@ -192,22 +169,22 @@ static int cmp_char(const void* a, const void* b) {
     return *(char*)a - *(char*)b;
 }
 
-static void write_doc(bson_buffer_t buffer, VALUE hash, VALUE check_keys, VALUE move_id);
-static int write_element_with_id(VALUE key, VALUE value, VALUE extra);
-static int write_element_without_id(VALUE key, VALUE value, VALUE extra);
-static VALUE elements_to_hash(const char* buffer, int max);
+/*static*/ void write_doc(bson_buffer_t buffer, VALUE hash, VALUE check_keys, VALUE move_id);
+/*static*/ int write_element_with_id(VALUE key, VALUE value, VALUE extra);
+/*static*/ int write_element_without_id(VALUE key, VALUE value, VALUE extra);
+/*static*/ VALUE elements_to_hash(const char* buffer, int max);
 
-static VALUE pack_extra(bson_buffer_t buffer, VALUE check_keys) {
+/*static*/ VALUE pack_extra(bson_buffer_t buffer, VALUE check_keys) {
     return rb_ary_new3(2, LL2NUM((long long)buffer), check_keys);
 }
 
-static void write_name_and_type(bson_buffer_t buffer, VALUE name, char type) {
+/*static*/ void write_name_and_type(bson_buffer_t buffer, VALUE name, char type) {
     SAFE_WRITE(buffer, &type, 1);
     write_utf8(buffer, name, 1);
     SAFE_WRITE(buffer, &zero, 1);
 }
 
-static int write_element(VALUE key, VALUE value, VALUE extra, int allow_id) {
+/*static*/ int write_element(VALUE key, VALUE value, VALUE extra, int allow_id) {
     bson_buffer_t buffer = (bson_buffer_t)NUM2LL(rb_ary_entry(extra, 0));
     VALUE check_keys = rb_ary_entry(extra, 1);
 
@@ -301,6 +278,7 @@ static int write_element(VALUE key, VALUE value, VALUE extra, int allow_id) {
             bson_buffer_position length_location, start_position, obj_length;
             int items, i;
             VALUE* values;
+            char name[ARRAY_KEY_BUFFER_SIZE];
 
             write_name_and_type(buffer, key, 0x04);
             start_position = bson_buffer_get_position(buffer);
@@ -312,15 +290,14 @@ static int write_element(VALUE key, VALUE value, VALUE extra, int allow_id) {
             }
 
             items = RARRAY_LENINT(value);
+            if (items > ARRAY_KEY_MAX_CPP)
+                rb_raise(rb_eRangeError, "array size too large");
             for(i = 0; i < items; i++) {
-                char* name;
                 VALUE key;
-                INT2STRING(&name, i);
+                SNPRINTF(name, ARRAY_KEY_BUFFER_SIZE, "%d", i);
                 key = rb_str_new2(name);
                 write_element_with_id(key, rb_ary_entry(value, i), pack_extra(buffer, check_keys));
-                FREE_INTSTRING(name);
             }
-
             // write null byte and fill in length
             SAFE_WRITE(buffer, &zero, 1);
             obj_length = bson_buffer_get_position(buffer) - start_position;
@@ -435,10 +412,11 @@ static int write_element(VALUE key, VALUE value, VALUE extra, int allow_id) {
                 break;
             }
             if (strcmp(cls, "BSON::Timestamp") == 0) {
+                unsigned int seconds, increment;
                 write_name_and_type(buffer, key, 0x11);
-                unsigned int seconds = NUM2UINT(
+                seconds = NUM2UINT(
                     rb_funcall(value, rb_intern("seconds"), 0));
-                unsigned int increment = NUM2UINT(
+                increment = NUM2UINT(
                     rb_funcall(value, rb_intern("increment"), 0));
 
                 SAFE_WRITE(buffer, (const char*)&increment, 4);
@@ -532,15 +510,15 @@ static int write_element(VALUE key, VALUE value, VALUE extra, int allow_id) {
     return ST_CONTINUE;
 }
 
-static int write_element_without_id(VALUE key, VALUE value, VALUE extra) {
+/*static*/ int write_element_without_id(VALUE key, VALUE value, VALUE extra) {
     return write_element(key, value, extra, 0);
 }
 
-static int write_element_with_id(VALUE key, VALUE value, VALUE extra) {
+/*static*/ int write_element_with_id(VALUE key, VALUE value, VALUE extra) {
     return write_element(key, value, extra, 1);
 }
 
-static void write_doc(bson_buffer_t buffer, VALUE hash, VALUE check_keys, VALUE move_id) {
+/*static*/ void write_doc(bson_buffer_t buffer, VALUE hash, VALUE check_keys, VALUE move_id) {
     bson_buffer_position start_position = bson_buffer_get_position(buffer);
     bson_buffer_position length_location = bson_buffer_save_space(buffer, 4);
     bson_buffer_position length;
@@ -615,7 +593,7 @@ static void write_doc(bson_buffer_t buffer, VALUE hash, VALUE check_keys, VALUE 
     SAFE_WRITE_AT_POS(buffer, length_location, (const char*)&length, 4);
 }
 
-static VALUE method_serialize(VALUE self, VALUE doc, VALUE check_keys,
+/*static*/ VALUE method_serialize(VALUE self, VALUE doc, VALUE check_keys,
     VALUE move_id, VALUE max_size) {
 
     VALUE result;
@@ -634,7 +612,7 @@ static VALUE method_serialize(VALUE self, VALUE doc, VALUE check_keys,
     return result;
 }
 
-static VALUE get_value(const char* buffer, int* position, int type) {
+/*static*/ VALUE get_value(const char* buffer, int* position, int type) {
     VALUE value;
     switch (type) {
     case -1:
@@ -742,10 +720,23 @@ static VALUE get_value(const char* buffer, int* position, int type) {
         }
     case 9:
         {
-            long long millis;
+            int64_t millis;
             memcpy(&millis, buffer + *position, 8);
 
-            value = rb_time_new(millis / 1000, (millis % 1000) * 1000);
+            // Support 64-bit time values in 32 bit environments in Ruby > 1.9
+            // Note: rb_time_num_new is not available pre Ruby 1.9
+            #if RUBY_API_VERSION_CODE >= 10900
+                #define add(x,y) (rb_funcall((x), '+', 1, (y)))
+                #define mul(x,y) (rb_funcall((x), '*', 1, (y)))
+                #define quo(x,y) (rb_funcall((x), rb_intern("quo"), 1, (y)))
+                VALUE d, timev;
+                d = LL2NUM(1000LL);
+                timev = add(LL2NUM(millis / 1000), quo(LL2NUM(millis % 1000), d));
+                value = rb_time_num_new(timev, Qnil);
+            #else
+                value = rb_time_new(millis / 1000, (millis % 1000) * 1000);
+            #endif
+
             value = rb_funcall(value, utc_method, 0);
             *position += 8;
             break;
@@ -873,7 +864,7 @@ static VALUE get_value(const char* buffer, int* position, int type) {
     return value;
 }
 
-static VALUE elements_to_hash(const char* buffer, int max) {
+/*static*/ VALUE elements_to_hash(const char* buffer, int max) {
     VALUE hash = rb_class_new_instance(0, NULL, OrderedHash);
     int position = 0;
     while (position < max) {
@@ -888,7 +879,7 @@ static VALUE elements_to_hash(const char* buffer, int max) {
     return hash;
 }
 
-static VALUE method_deserialize(VALUE self, VALUE bson) {
+/*static*/ VALUE method_deserialize(VALUE self, VALUE bson) {
     const char* buffer = RSTRING_PTR(bson);
     int remaining = RSTRING_LENINT(bson);
 
@@ -899,7 +890,7 @@ static VALUE method_deserialize(VALUE self, VALUE bson) {
     return elements_to_hash(buffer, remaining);
 }
 
-static VALUE objectid_generate(int argc, VALUE* args, VALUE self)
+/*static*/ VALUE objectid_generate(int argc, VALUE* args, VALUE self)
 {
     VALUE oid;
     unsigned char oid_bytes[12];
@@ -939,12 +930,12 @@ static VALUE objectid_generate(int argc, VALUE* args, VALUE self)
     return oid;
 }
 
-static VALUE method_update_max_bson_size(VALUE self, VALUE connection) {
+/*static*/ VALUE method_update_max_bson_size(VALUE self, VALUE connection) {
     max_bson_size = FIX2INT(rb_funcall(connection, rb_intern("max_bson_size"), 0));
     return INT2FIX(max_bson_size);
 }
 
-static VALUE method_max_bson_size(VALUE self) {
+/*static*/ VALUE method_max_bson_size(VALUE self) {
     return INT2FIX(max_bson_size);
 }
 

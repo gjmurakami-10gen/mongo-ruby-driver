@@ -1,0 +1,73 @@
+require 'rake' if File.basename($0) == 'Rakefile'
+
+TARGETS = %w{large_date_test write_array_test}
+PROJECT_ROOT = __FILE__[%r{(.*)/test/},1]
+GTEST_URL = 'http://googletest.googlecode.com/files/gtest-1.6.0.zip'
+GTEST_ROOT = Dir["#{PROJECT_ROOT}/../gtest-*"].first
+GTEST_CONFIG = "#{GTEST_ROOT}/scripts/gtest-config"
+GTEST_LIB = "gtest-all.o"
+
+RUBY_HOME = ENV['MY_RUBY_HOME']
+RUBY_INCLUDE_DIR = Dir["#{RUBY_HOME}/include/ruby-*"].first
+RUBY_LIB_DIR = "#{RUBY_HOME}/lib"
+RUBY_LIB = "#{RUBY_LIB_DIR}/libruby.1.9.1-static.a"
+RUBY_DEFS = "-DHAVE_STRUCT_TIMESPEC -DHAVE_STRUCT_TIMEZONE"
+
+CBSON_INCLUDE_DIR = "#{PROJECT_ROOT}/ext/cbson"
+
+INCLUDES = "-I#{RUBY_INCLUDE_DIR} -I#{CBSON_INCLUDE_DIR}"
+LIBS = "-lruby_static.a"
+
+EXT_CBSON = %w{bson_buffer cbson encoding_helpers}
+CBSON_OBJS = EXT_CBSON.collect{|f| "#{f}.o"}
+
+task :default => TARGETS.collect{|target| "test:#{target}_task"}
+
+namespace :test do
+  TARGETS.each do |target|
+    task "#{target}_task".to_sym => [target] do |t|
+      sh "./#{target}"
+    end
+  end
+end
+
+TARGETS.each do |target|
+  file target => ["#{target}.o", CBSON_OBJS, GTEST_LIB, RUBY_LIB].flatten do |f|
+    sh "g++ -g -o #{f} #{f.prerequisites.join(' ')}"
+  end
+
+  file "#{target}.o" => "#{target}.cc" do |f|
+    sh "g++ -g $(#{GTEST_CONFIG} --cppflags --cxxflags) #{RUBY_DEFS} #{INCLUDES} -c #{f.prerequisites[0]}"
+  end
+end
+
+EXT_CBSON.each do |ext|
+  file "#{ext}.o" => "../../ext/cbson/#{ext}.c" do |f|
+    sh "gcc -g #{RUBY_DEFS} -I#{RUBY_INCLUDE_DIR} -c #{f.prerequisites.first}"
+  end
+end
+
+task :gtest => ["#{PROJECT_ROOT}/../gtest-1.6.0"]
+
+file GTEST_LIB => ["#{PROJECT_ROOT}/../gtest-1.6.0"] do
+  gtest_root = Dir["#{PROJECT_ROOT}/../gtest-*"].first
+  sh "g++ -I#{gtest_root}/include -I#{gtest_root} -c #{gtest_root}/src/gtest-all.cc"
+end
+
+file "#{PROJECT_ROOT}/../gtest-1.6.0" => ['gtest-1.6.0.zip'] do
+  sh "unzip -o gtest*.zip -d #{PROJECT_ROOT}/../"
+end
+
+file 'gtest-1.6.0.zip' do
+  sh "wget #{GTEST_URL}"
+end
+
+task :clobber => [:clean] do
+  sh "rm -f #{TARGETS.join(' ')}"
+end
+
+task :clean do
+  sh "rm -f *.o"
+end
+
+Rake::Task[:default].invoke if File.basename($0) == 'Rakefile'

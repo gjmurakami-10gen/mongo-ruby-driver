@@ -19,7 +19,7 @@ module Mongo
 
       @socket_address = Socket.pack_sockaddr_in(@port, @host)
       @socket = Socket.new(Socket::AF_INET, Socket::SOCK_STREAM, 0)
-      @socket.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
+      #@socket.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
 
       connect
     end
@@ -69,13 +69,15 @@ module Mongo
       end
       if ready
         begin
-          @socket.readpartial(maxlen, buffer)
-        rescue EOFError
-          return ConnectionError
-        rescue Errno::ENOTCONN, Errno::EBADF, Errno::ECONNRESET, Errno::EPIPE
-          raise ConnectionFailure
-        rescue Errno::EINTR, Errno::EIO, IOError 
-          raise OperationFailure 
+          @socket.sysread(maxlen, buffer)
+        rescue SystemCallError => ex
+          # Needed because sometimes JRUBY doesn't throw Errno::ECONNRESET as it should
+          # http://jira.codehaus.org/browse/JRUBY-6180
+          raise ConnectionFailure, ex
+        rescue Errno::ENOTCONN, Errno::EBADF, Errno::ECONNRESET, Errno::EPIPE, Errno::ETIMEDOUT, EOFError => ex
+          raise ConnectionFailure, ex
+        rescue Errno::EINTR, Errno::EIO, IOError => ex
+          raise OperationFailure, ex
         end
       else
         raise OperationTimeout
