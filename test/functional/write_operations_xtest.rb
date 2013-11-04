@@ -264,8 +264,8 @@ class TestCollection < Test::Unit::TestCase
 
   BW_OPTS = {:w => 1}
   BENCHMARKS = [
-    #[0,"insert_documents huge single w:0", @@tweet_batch_huge, Proc.new {|docs|docs.each{|tweet|@@test.insert_documents([tweet], 'test', false, {:w => 0})}}],
-    #[0,"insert_documents huge single w:1", @@tweet_batch_huge, Proc.new {|docs|docs.each{|tweet|@@test.insert_documents([tweet], 'test', false, {:w => 1})}}],
+    [0,"insert_documents huge single w:0", @@tweet_batch_huge, Proc.new {|docs|docs.each{|tweet|@@test.insert_documents([tweet], 'test', false, {:w => 0})}}],
+    [0,"insert_documents huge single w:1", @@tweet_batch_huge, Proc.new {|docs|docs.each{|tweet|@@test.insert_documents([tweet], 'test', false, {:w => 1})}}],
     #[0,"insert_documents big w:1",         @@tweet_batch_big,  Proc.new {|docs|@@test.insert_documents(docs, 'test', false, {:w => 1})}],
     #[0,"batch_write_partition big w:1",    @@tweet_batch_big,  Proc.new {|docs|@@test.batch_write_partition(:insert, docs, false, BW_OPTS)}],
     #[0,"batch_write_partition big w:1",    @@tweet_batch_big,  Proc.new {|docs|@@test.batch_write_partition(:insert, docs, false, BW_OPTS)}],

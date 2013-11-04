@@ -218,11 +218,13 @@ batch_write_incremental - new implementation - improved incremental
 - 1 serialize-call/doc at high-level, new code
 - 1 serialize-call/doc at high-level, new code with BSON grow
 
-    secs:2.94, docs_per_sec:17493, max_wire_version:0, title:"insert_documents huge w:1"
-    secs:1.34, docs_per_sec:38379, max_wire_version:0, title:"batch_write_partition huge w:1"
-    secs:0.99, docs_per_sec:51947, max_wire_version:2, title:"batch_write_partition huge w:1"
-    secs:2.16, docs_per_sec:23809, max_wire_version:0, title:"batch_write_incremental huge w:1"
-    secs:2.47, docs_per_sec:20821, max_wire_version:2, title:"batch_write_incremental huge w:1"
+    secs:5.92, docs_per_sec:8687, max_wire_version:0, title:"insert_documents huge single w:0"
+    secs:10.80, docs_per_sec:4762, max_wire_version:0, title:"insert_documents huge single w:1"
+    secs:2.70, docs_per_sec:19047, max_wire_version:0, title:"insert_documents huge w:1"
+    secs:1.19, docs_per_sec:43217, max_wire_version:0, title:"batch_write_partition huge w:1"
+    secs:0.84, docs_per_sec:61224, max_wire_version:2, title:"batch_write_partition huge w:1"
+    secs:2.02, docs_per_sec:25459, max_wire_version:0, title:"batch_write_incremental huge w:1"
+    secs:2.24, docs_per_sec:22959, max_wire_version:2, title:"batch_write_incremental huge w:1"
 
 ## Jira tickets
 
