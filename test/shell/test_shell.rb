@@ -165,6 +165,10 @@ module Mongo
     def arbiter_names # pending - dummy
       []
     end
+
+    def servers # pending
+      []
+    end
   end
 end
 
@@ -193,45 +197,5 @@ end
 
 Test::Unit.at_exit do
   #TEST_BASE.class_eval { class_variable_get(:@@rs) }.exit
-end
-
-class ReplicaSetBasicTest < Test::Unit::TestCase
-
-  def setup
-    ensure_cluster(:rs)
-  end
-
-  def teardown
-    #stringio = StringIO.new
-    #@@rs.sh(@@rs.replica_set_test_stop, stringio)
-    #print stringio.string
-    #@@rs.exit
-  end
-
-  def test_rs_methods
-    puts "@rs.repl_set_name:#{@rs.repl_set_name.inspect}"
-    puts "@rs.repl_set_seeds:#{@rs.repl_set_seeds.inspect}"
-    puts "@rs.repl_set_seeds_old:#{@rs.repl_set_seeds_old.inspect}"
-    puts "@rs.primary_name:#{@rs.primary_name.inspect}"
-    puts "@rs.secondary_names:#{@rs.secondary_names.inspect}"
-    puts "@rs.arbiter_names:#{@rs.arbiter_names.inspect}"
-  end
-
-  def test_connect
-    client = MongoReplicaSetClient.new(@rs.repl_set_seeds, :name => @rs.repl_set_name)
-    assert client.connected?
-    assert_equal @rs.primary_name, client.primary.join(':')
-    assert_equal @rs.secondary_names.sort, client.secondaries.collect{|s| s.join(':')}.sort
-    assert_equal @rs.arbiter_names.sort, client.arbiters.collect{|s| s.join(':')}.sort
-    client.close
-
-    silently do
-      client = MongoReplicaSetClient.new(@rs.repl_set_seeds_old, :name => @rs.repl_set_name)
-    end
-
-    assert client.connected?
-    client.close
-  end
-
 end
 

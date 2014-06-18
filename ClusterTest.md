@@ -6,6 +6,8 @@ Completed today
 
 - mongo output to logfile
 - Mongo::Shell#sh output
+- mongo-ruby-driver/1.x-stable-cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo-ruby-driver/tree/1.x-stable-cluster-test
+- mongo/cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo/tree/cluster-test
 
 Pending
 
