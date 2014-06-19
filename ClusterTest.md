@@ -2,8 +2,11 @@
 
 ## Status
 
-- passing tests - basic max_values pinning replication_ack_test
-- failing tests - authentication client complex_connect connection count cursor insert query read_preference refresh ssl
+Selected Ruby replica set tests are passing with setup/teardown of replica set for each test, 25 seconds per test.
+
+see tasks/dev.rake for status of passing and failing tests
+- passing tests - basic client max_values pinning replication_ack_test
+- failing tests - authentication complex_connect connection count cursor insert query read_preference refresh ssl
 
 ## Work Items
 
@@ -29,7 +32,7 @@
     - fit into driver test framework
     - framework methods
 
-    - Node#id, #stop and #kill forced restructuring with @conn connection string
+    - Node#id #stop #kill restructuring with @conn string
          
          ruby -e 'puts ARGF.read.gsub(/@rs/,"\n@rs").split("\n").grep(/^@rs/).sort.join("\n")' test/replica_set/*.rb | uniq
          
@@ -229,3 +232,5 @@
 
 - [mock_replica_set.h](https://github.com/mongodb/mongo/blob/master/src/mongo/dbtests/mock/mock_replica_set.h)
 - [mock_replica_set_test.cpp](https://github.com/mongodb/mongo/blob/master/src/mongo/dbtests/mock_replica_set_test.cpp)
+
+{"set" : "test","date" : ISODate("2014-06-19T16:05:53Z"),"myState" : 1,"members" : [{"_id" : 0,"name" : "osprey.local:31000","health" : 1,"state" : 1,"stateStr" : "PRIMARY","uptime" : 671,"optime" : Timestamp(1403193283, 1),"optimeDate" : ISODate("2014-06-19T15:54:43Z"),"electionTime" : Timestamp(1403193293, 1),"electionDate" : ISODate("2014-06-19T15:54:53Z"),"self" : true},{"_id" : 1,"name" : "osprey.local:31001","health" : 1,"state" : 2,"stateStr" : "SECONDARY","uptime" : 670,"optime" : Timestamp(1403193283, 1),"optimeDate" : ISODate("2014-06-19T15:54:43Z"),"lastHeartbeat" : ISODate("2014-06-19T16:05:52Z"),"lastHeartbeatRecv" : ISODate("2014-06-19T16:05:52Z"),"pingMs" : 0,"syncingTo" : "osprey.local:31000"},{"_id" : 2,"name" : "osprey.local:31002","health" : 1,"state" : 2,"stateStr" : "SECONDARY","uptime" : 668,"optime" : Timestamp(1403193283, 1),"optimeDate" : ISODate("2014-06-19T15:54:43Z"),"lastHeartbeat" : ISODate("2014-06-19T16:05:52Z"),"lastHeartbeatRecv" : ISODate("2014-06-19T16:05:52Z"),"pingMs" : 0,"syncingTo" : "osprey.local:31000"}],"ok" : 1

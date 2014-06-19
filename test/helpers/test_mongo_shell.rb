@@ -10,6 +10,22 @@ class String
   def parse_psuedo_array
     self[/^\[(.*)\]$/m,1].split(',').collect{|s| s.strip}
   end
+
+  def sub_to_json_start
+    sub(/^[^{]*{/m, '{')
+  end
+
+  def gsub_isodate
+    gsub(/ISODate\((".+?")\)/, '\1')
+  end
+
+  def gsub_timestamp
+    gsub(/Timestamp\((\d+), \d+\)/, '\1')
+  end
+
+  def to_json
+    sub_to_json_start.gsub_isodate.gsub_timestamp
+  end
 end
 
 # Mongo::Shell should be extracted into a separate file but is left here for the purposes of demonstration for now
@@ -40,12 +56,12 @@ module Mongo
 
       def kill(signal = Signal.list['KILL'])
         result = @rs.x_s("rs.stop(#{id.inspect},#{signal.inspect});")
-        puts "Node.kill self:#{self.inspect} signal:#{signal.inspect} result:#{result.inspect}"
+        raise result unless /shell: stopped mongo program/.match(result)
       end
 
       def stop
         result = @rs.x_s("rs.stop(#{id.inspect});")
-        puts "Node.stop self:#{self.inspect} result:#{result.inspect}"
+        raise result unless /shell: stopped mongo program/.match(result)
       end
     end
 
@@ -142,7 +158,7 @@ module Mongo
     end
 
     def x_json(s, prompt = PROMPT)
-      JSON.parse(x_s(s, prompt))
+      JSON.parse(x_s(s, prompt).to_json)
     end
 
     def sh(s, out = @out)
@@ -150,16 +166,22 @@ module Mongo
     end
 
     def replica_set_test_start(opts = { :name => 'test', :nodes => 3, :startPort => 31000 })
-      <<-EOF.pretrim_lines
-        var rs = new ReplSetTest( #{opts.to_json} );
-        rs.startSet();
-        rs.initiate();
-        rs.awaitReplication();
-      EOF
+      sio = StringIO.new
+      sh("var rs = new ReplSetTest( #{opts.to_json} );", sio)
+      sh("rs.startSet();", sio)
+      raise sio.string unless /ReplSetTest Starting/.match(sio.string)
+      sh("rs.initiate();", sio)
+      raise sio.string unless /Config now saved locally.  Should come online in about a minute./.match(sio.string)
+      sh("rs.awaitReplication();", sio)
+      raise sio.string unless /ReplSetTest awaitReplication: finished: all/.match(sio.string)
+      sio.string
     end
 
     def replica_set_test_stop
-      "rs.stopSet();"
+      sio = StringIO.new
+      sh("rs.stopSet();", sio)
+      raise sio.string unless /ReplSetTest stopSet \*\*\* Shut down repl set - test worked \*\*\*/.match(sio.string)
+      sio.string
     end
 
     def replica_set_test_restart
@@ -167,6 +189,10 @@ module Mongo
         rs.reInitiate(60000);
         rs.awaitReplication();
       EOF
+    end
+
+    def status
+      x_s("rs.status();")
     end
 
     def nodes
@@ -213,6 +239,10 @@ module Mongo
     alias_method :repl_set_seeds_old, :node_list_as_ary
     alias_method :replicas, :nodes
     alias_method :servers, :nodes
+
+    def repl_set_seeds_uri
+      repl_set_seeds.join(',')
+    end
   end
 end
 
@@ -221,25 +251,34 @@ class Test::Unit::TestCase
   include BSON
 
   def ensure_cluster(kind=nil, opts={})
-    unless defined? @@rs
-      @@rs = Mongo::Shell.new
+    case kind
+      when :rs
+        default_opts = {:name => 'test', :nodes => 3, :startPort => 31000}
+        opts = default_opts.merge(opts)
+        unless defined? @@rs
+          @@rs = Mongo::Shell.new
+          #pp @@rs.socket.methods.sort
+        end
+        if @@rs.x_s("typeof rs;") == "object"
+          #puts "@@rs.status:\n"
+          #puts @@rs.status
+          @@rs.replica_set_test_start(opts)
+        else
+          @@rs.replica_set_test_start(opts)
+        end
+        @rs = @@rs
     end
-    if @@rs.x_s("typeof rs;") == "object"
-      stringio = StringIO.new
-      #@@rs.sh(@@rs.replica_set_test_restart, stringio)
-      print stringio.string
-    else
-      #pp @@rs.socket.methods.sort
-      opts = {:name => 'test', :nodes => 3, :startPort => 31000}
-      stringio = StringIO.new
-      @@rs.sh(@@rs.replica_set_test_start(opts), stringio)
-      #print stringio.string
+  end
+
+  def stop_cluster(kind=nil, opts={})
+    case kind
+      when :rs
+        @@rs.replica_set_test_stop
     end
-    @rs = @@rs
   end
 end
 
 Test::Unit.at_exit do
-  #TEST_BASE.class_eval { class_variable_get(:@@rs) }.exit
+  TEST_BASE.class_eval { class_variable_get(:@@rs).exit }
 end
 

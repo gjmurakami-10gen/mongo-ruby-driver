@@ -21,6 +21,10 @@ class ReplicaSetBasicTest < Test::Unit::TestCase
     ensure_cluster(:rs)
   end
 
+  def teardown
+    stop_cluster(:rs)
+  end
+
   def test_rs_methods
     if defined? Mongo::Shell
       puts "@rs.nodes:#{@rs.nodes.inspect}"
@@ -39,6 +43,7 @@ class ReplicaSetBasicTest < Test::Unit::TestCase
     puts "@rs.repl_set_name:#{@rs.repl_set_name.inspect}"
     puts "@rs.repl_set_seeds:#{@rs.repl_set_seeds.inspect}"
     puts "@rs.repl_set_seeds_old:#{@rs.repl_set_seeds_old.inspect}"
+    puts "@rs.repl_set_seeds_uri:#{@rs.repl_set_seeds_uri.inspect}"
 
     puts "@rs.servers:#{@rs.servers.inspect}"
     puts "@rs.servers.first.host:#{@rs.servers.first.host.inspect}"
