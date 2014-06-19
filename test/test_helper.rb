@@ -46,6 +46,7 @@ require 'tools/mongo_config'
 # test helpers
 require 'helpers/general'
 require 'helpers/test_unit'
+#require 'helpers/test_mongo_shell'
 
 # optional development and debug utilities
 begin

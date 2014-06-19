@@ -20,6 +20,7 @@
     - Ruby Mongo::Shell methods for replica set tests
     - psuedo-array output parsing
     - test/replica_set/basic_test.rb actually passes
+    - fit into driver test framework
 
 - mongo-ruby-driver/1.x-stable-cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo-ruby-driver/tree/1.x-stable-cluster-test
 - mongo/cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo/tree/cluster-test
