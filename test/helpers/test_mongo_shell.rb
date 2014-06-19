@@ -19,24 +19,33 @@ module Mongo
   class Shell
 
     class Node
-      attr_reader :host_port, :host, :port
+      attr_reader :rs, :conn, :host_port, :host, :port
 
-      def initialize(host_port)
+      def initialize(rs, conn)
+        @rs = rs
+        @conn = conn
+        @host_port = conn.sub('connection to ', '')
         @host_port = host_port
         @host, @port = host_port.split(':')
         @port = @port.to_i
       end
 
-      def self.a_from_list(list)
-        list.collect{|s| Node.new(s)}
+      def self.a_from_list(rs, list)
+        list.collect{|s| Node.new(rs, s)}
+      end
+
+      def id
+        @rs.x_s("rs.getNodeId(#{@conn.inspect});").to_i
       end
 
       def kill(signal = Signal.list['KILL'])
-        # pending
+        result = @rs.x_s("rs.stop(#{id.inspect},#{signal.inspect});")
+        puts "Node.kill self:#{self.inspect} signal:#{signal.inspect} result:#{result.inspect}"
       end
 
       def stop
-        # pending
+        result = @rs.x_s("rs.stop(#{id.inspect});")
+        puts "Node.stop self:#{self.inspect} result:#{result.inspect}"
       end
     end
 
@@ -160,36 +169,36 @@ module Mongo
       EOF
     end
 
-    def node_list
-      x_json("rs.nodeList();")
-    end
-
     def nodes
-      Node.a_from_list(node_list)
-    end
-
-    def primary_name
-      x_s("rs.getPrimary();").gsub('connection to ', '')
+      Node.a_from_list(self, x_s("rs.nodes;").parse_psuedo_array)
     end
 
     def primary
-      Node.new(primary_name)
+      Node.new(self, x_s("rs.getPrimary();"))
     end
 
-    def secondary_names
-      x_s("rs.getSecondaries();").parse_psuedo_array.collect{|s| s.gsub('connection to ', '')}
+    def primary_name
+      primary.host_port
     end
 
     def secondaries
-      Node.a_from_list(secondary_names)
+      Node.a_from_list(self, x_s("rs.getSecondaries();").parse_psuedo_array)
     end
 
-    def arbiter_names # dummy
+    def secondary_names
+      secondaries.map(&:host_port)
+    end
+
+    def arbiters # dummy
       []
     end
 
-    def arbiters
-      Node.a_from_list(arbiter_names)
+    def arbiter_names
+      arbiters.map(&:host_port)
+    end
+
+    def node_list
+      x_json("rs.nodeList();")
     end
 
     def node_list_as_ary
@@ -202,6 +211,7 @@ module Mongo
 
     alias_method :repl_set_seeds, :node_list
     alias_method :repl_set_seeds_old, :node_list_as_ary
+    alias_method :replicas, :nodes
     alias_method :servers, :nodes
   end
 end

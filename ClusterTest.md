@@ -9,7 +9,8 @@
 
 ### Pending
 
-- restart/reinitialize replica set - replica_set_test_restart
+- status/restart/reinitialize replica set - replica_set_test_restart
+
 - redirect log() output
 - sharded cluster (minimal)
 - test cluster db directories
@@ -27,6 +28,8 @@
     - test/replica_set/basic_test.rb actually passes
     - fit into driver test framework
     - framework methods
+
+    - Node#id, #stop and #kill forced restructuring with @conn connection string
          
          ruby -e 'puts ARGF.read.gsub(/@rs/,"\n@rs").split("\n").grep(/^@rs/).sort.join("\n")' test/replica_set/*.rb | uniq
          
