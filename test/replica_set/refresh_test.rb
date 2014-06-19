@@ -20,6 +20,10 @@ class ReplicaSetRefreshTest < Test::Unit::TestCase
     ensure_cluster(:rs)
   end
 
+  def teardown
+    stop_cluster(:rs)
+  end
+
   def test_connect_and_manual_refresh_with_secondary_down
     num_secondaries = @rs.secondaries.size
     client = MongoReplicaSetClient.new(@rs.repl_set_seeds, :refresh_mode => false)

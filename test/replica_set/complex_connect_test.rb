@@ -22,6 +22,7 @@ class ComplexConnectTest < Test::Unit::TestCase
 
   def teardown
     @client.close if defined?(@conn) && @conn
+    stop_cluster(:rs)
   end
 
   def test_complex_connect

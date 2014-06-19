@@ -29,6 +29,10 @@ class MaxValuesTest < Test::Unit::TestCase
     }
   end
 
+  def teardown
+    stop_cluster(:rs)
+  end
+
   def test_initial_max_and_min_values
     assert @client.max_bson_size
     assert @client.max_message_size

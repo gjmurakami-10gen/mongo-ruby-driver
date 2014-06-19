@@ -1,23 +1,31 @@
 PASSING_TESTS =  %w{
   basic
   client
+  connection
+  count
+  max_values
+  pinning
+  query
+  replication_ack
 }
 
 FAILING_TESTS = %w{
   authentication
   complex_connect
-  connection
-  count
   cursor
   insert
-  max_values
-  pinning
-  query
   read_preference
   refresh
-  replication_ack
   ssl
 }
+
+# authentication - pending
+# complex_connect - @rs.start
+# cursor - @read is nil
+# insert - @rs.start
+# read_preferences - @rs.config @rs.restart
+# refresh_test - @rs.member_by_name @rs.restart @rs.stop_secondary # @rs.add_node(n) @rs.remove_secondary_node @rs.repl_set_remove_node(2)
+# ssl - pending
 
 SKIP_TESTS = %w{
   framework

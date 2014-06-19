@@ -20,6 +20,10 @@ class ReplicaSetCursorTest < Test::Unit::TestCase
     ensure_cluster(:rs)
   end
 
+  def teardown
+    stop_cluster(:rs)
+  end
+
   def test_get_more_primary
     setup_client(:primary)
     cursor_get_more_test(:primary)

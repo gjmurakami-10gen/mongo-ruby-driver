@@ -23,6 +23,10 @@ class ReplicaSetPinningTest < Test::Unit::TestCase
     @coll.insert({:a => 1})
   end
 
+  def teardown
+    stop_cluster(:rs)
+  end
+
   def test_unpinning
     # pin primary
     @coll.find_one

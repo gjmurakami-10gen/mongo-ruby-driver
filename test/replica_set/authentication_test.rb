@@ -32,4 +32,8 @@ class ReplicaSetAuthenticationTest < Test::Unit::TestCase
     @db        = @client[TEST_DB]
     @host_info = @rs.repl_set_seeds.join(',')
   end
+
+  def teardown
+    stop_cluster(:rs)
+  end
 end

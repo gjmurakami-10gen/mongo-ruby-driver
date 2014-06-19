@@ -33,6 +33,7 @@ class ReplicaSetAckTest < Test::Unit::TestCase
 
   def teardown
     @client.close if @conn
+    stop_cluster(:rs)
   end
 
   def test_safe_mode_with_w_failure

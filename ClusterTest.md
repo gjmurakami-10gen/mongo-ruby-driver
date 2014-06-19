@@ -5,14 +5,15 @@
 Selected Ruby replica set tests are passing with setup/teardown of replica set for each test, 25 seconds per test.
 
 see tasks/dev.rake for status of passing and failing tests
-- passing tests - basic client max_values pinning replication_ack_test
-- failing tests - authentication complex_connect connection count cursor insert query read_preference refresh ssl
+- passing tests - basic client count max_values pinning replication_ack_test
+- failing tests - authentication complex_connect connection cursor insert query read_preference refresh ssl
 
 ## Work Items
 
 ### Pending
 
 - status/restart/reinitialize replica set - replica_set_test_restart
+- robustness for restart
 
 - redirect log() output
 - sharded cluster (minimal)
@@ -41,20 +42,11 @@ see tasks/dev.rake for status of passing and failing tests
          - @rs.config['host']
          - @rs.member_by_name(pool.host_string).stop
          - @rs.remove_secondary_node
-         - @rs.replicas
          - @rs.repl_set_get_status
-         - n = @rs.repl_set_remove_node(2)
-         - @rs.repl_set_seeds_uri
+         - @rs.repl_set_remove_node(2)
          - @rs.restart
-         - @rs.stop_secondary
-         
-         completed/close
-         - @rs.secondaries.size
-         - @rs.primary.kill(Signal.list['KILL'])
-         - @rs.primary.stop
-         - @rs.secondaries.first.stop
-         - @rs.secondaries.last.stop         
          - @rs.start
+         - @rs.stop_secondary
                  
 - mongo-ruby-driver/1.x-stable-cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo-ruby-driver/tree/1.x-stable-cluster-test
 - mongo/cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo/tree/cluster-test
