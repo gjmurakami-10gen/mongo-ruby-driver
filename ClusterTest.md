@@ -21,7 +21,26 @@
     - psuedo-array output parsing
     - test/replica_set/basic_test.rb actually passes
     - fit into driver test framework
-
+    - passing tests - basic max_values pinning replication_ack_test
+    - failing tests - authentication client complex_connect connection count cursor
+            insert query read_preference refresh ssl
+         - @rs.add_node(n)
+         - @rs.config['host']
+         - @rs.member_by_name(pool.host_string).stop
+         - @rs.primary.kill(Signal.list['KILL'])
+         - @rs.primary.stop
+         - @rs.remove_secondary_node
+         - @rs.replicas
+         - @rs.repl_set_get_status
+         - n = @rs.repl_set_remove_node(2)
+         - @rs.repl_set_seeds_uri
+         - @rs.restart
+         - @rs.secondaries.first.stop
+         - @rs.secondaries.last.stop
+         - @rs.secondaries.size
+         - @rs.start
+         - @rs.stop_secondary
+                  
 - mongo-ruby-driver/1.x-stable-cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo-ruby-driver/tree/1.x-stable-cluster-test
 - mongo/cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo/tree/cluster-test
 

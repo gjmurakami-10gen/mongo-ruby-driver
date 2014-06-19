@@ -166,7 +166,7 @@ module Mongo
     end
 
     def servers
-      node_list_as_ary.collect{|a| os = OpenStruct.new; os.host = a[0]; os.port = a[1]; os}
+      node_list_as_ary.collect{|a| os = OpenStruct.new; os.host = a[0]; os.port = a[1]; os.host_port = "#{a[0]}:#{a[1]}"; os}
     end
   end
 end
