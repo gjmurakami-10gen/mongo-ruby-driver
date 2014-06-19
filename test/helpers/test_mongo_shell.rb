@@ -1,7 +1,6 @@
 require 'test_helper'
 require 'pp'
 require 'json'
-require 'ostruct'
 
 class String
   def pretrim_lines
@@ -18,6 +17,29 @@ module Mongo
   # A Mongo shell for cluster testing with methods for socket communication and testing convenience.
   # IO is synchronous with delimiters such as the prompt "> ".
   class Shell
+
+    class Node
+      attr_reader :host_port, :host, :port
+
+      def initialize(host_port)
+        @host_port = host_port
+        @host, @port = host_port.split(':')
+        @port = @port.to_i
+      end
+
+      def self.a_from_list(list)
+        list.collect{|s| Node.new(s)}
+      end
+
+      def kill(signal = Signal.list['KILL'])
+        # pending
+      end
+
+      def stop
+        # pending
+      end
+    end
+
     MONGO = '../mongo/mongo'
     CMD = %W{#{MONGO} --nodb --shell --listen}
     PORT = 30001
@@ -138,36 +160,49 @@ module Mongo
       EOF
     end
 
-    def repl_set_name
-      x_s("rs.name;")
-    end
-
     def node_list
       x_json("rs.nodeList();")
     end
 
-    def node_list_as_ary
-      node_list.collect{|seed| a = seed.split(':'); [a[0], a[1].to_i]}
+    def nodes
+      Node.a_from_list(node_list)
     end
-
-    alias_method :repl_set_seeds, :node_list
-    alias_method :repl_set_seeds_old, :node_list_as_ary
 
     def primary_name
       x_s("rs.getPrimary();").gsub('connection to ', '')
+    end
+
+    def primary
+      Node.new(primary_name)
     end
 
     def secondary_names
       x_s("rs.getSecondaries();").parse_psuedo_array.collect{|s| s.gsub('connection to ', '')}
     end
 
-    def arbiter_names # pending - dummy
+    def secondaries
+      Node.a_from_list(secondary_names)
+    end
+
+    def arbiter_names # dummy
       []
     end
 
-    def servers
-      node_list_as_ary.collect{|a| os = OpenStruct.new; os.host = a[0]; os.port = a[1]; os.host_port = "#{a[0]}:#{a[1]}"; os}
+    def arbiters
+      Node.a_from_list(arbiter_names)
     end
+
+    def node_list_as_ary
+      node_list.collect{|seed| a = seed.split(':'); [a[0], a[1].to_i]}
+    end
+
+    def repl_set_name
+      x_s("rs.name;")
+    end
+
+    alias_method :repl_set_seeds, :node_list
+    alias_method :repl_set_seeds_old, :node_list_as_ary
+    alias_method :servers, :nodes
   end
 end
 
