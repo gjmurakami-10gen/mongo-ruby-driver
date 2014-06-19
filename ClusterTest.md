@@ -1,27 +1,30 @@
 # Mongo Shell Cluster Testing Notes
 
-## Issues / Changes to the Mongo Shell
+## Work Items
 
-Completed today
+### Pending
 
-- mongo output to logfile
-- Mongo::Shell#sh output
-- mongo-ruby-driver/1.x-stable-cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo-ruby-driver/tree/1.x-stable-cluster-test
-- mongo/cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo/tree/cluster-test
-
-Pending
-
-- test_connect
+- restart/reinitialize replica set - replica_set_test_restart
 - redirect log() output
-- repo fork initial commits
-- exitCleanly(?)
-- output parsing
-- reinitialize replica set
 - sharded cluster (minimal)
 - test cluster db directories
 - rake test:cleanup
 
-Completed
+### Completed
+
+- Ruby Mongo::Shell class interface to mongo shell
+
+    - mongo output to logfile
+    - Mongo::Shell#sh output to IO arg (ex., StringIO)
+    - test_connect
+    - Ruby Mongo::Shell methods for replica set tests
+    - psuedo-array output parsing
+    - test/replica_set/basic_test.rb actually passes
+
+- mongo-ruby-driver/1.x-stable-cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo-ruby-driver/tree/1.x-stable-cluster-test
+- mongo/cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo/tree/cluster-test
+
+## Mongo Shell with socket interface
 
 - I/O via socket
 

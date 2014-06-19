@@ -1,10 +1,15 @@
 require 'test_helper'
 require 'pp'
 require 'json'
+require 'ostruct'
 
 class String
   def pretrim_lines
     gsub(/^\s+/, '')
+  end
+
+  def parse_psuedo_array
+    self[/^\[(.*)\]$/m,1].split(',').collect{|s| s.strip}
   end
 end
 
@@ -21,11 +26,6 @@ module Mongo
     RETRIES = 10
     PROMPT = %r{> $}m
     BYE = %r{^bye\n$}m
-
-    CHA_S = %r{\e\[\d+G\s+}m # Cursor Horizontal Absolute + white space
-    BOJSON = %r{^[\[\{]} # Beginning Of JSON at start of string
-    NEWLINES = %r{[\r\n]+}
-
 
     attr_reader :socket
 
@@ -110,10 +110,6 @@ module Mongo
       puts(s).read(prompt).sub(prompt,'').chomp
     end
 
-    def x_ruby(s, prompt = PROMPT)
-      eval(x_s(s, prompt))
-    end
-
     def x_json(s, prompt = PROMPT)
       JSON.parse(x_s(s, prompt))
     end
@@ -125,7 +121,7 @@ module Mongo
     def replica_set_test_start(opts = { :name => 'test', :nodes => 3, :startPort => 31000 })
       <<-EOF.pretrim_lines
         var rs = new ReplSetTest( #{opts.to_json} );
-        var nodes = rs.startSet();
+        rs.startSet();
         rs.initiate();
         rs.awaitReplication();
       EOF
@@ -146,28 +142,31 @@ module Mongo
       x_s("rs.name;")
     end
 
-    def repl_set_seeds
+    def node_list
       x_json("rs.nodeList();")
     end
 
-    def repl_set_seeds_old
-      repl_set_seeds.collect{|seed| a = seed.split(':'); [a[0], a[1].to_i]}
+    def node_list_as_ary
+      node_list.collect{|seed| a = seed.split(':'); [a[0], a[1].to_i]}
     end
+
+    alias_method :repl_set_seeds, :node_list
+    alias_method :repl_set_seeds_old, :node_list_as_ary
 
     def primary_name
       x_s("rs.getPrimary();").gsub('connection to ', '')
     end
 
-    def secondary_names # pending - refactor recognition of [ ..., ... ]
-      JSON.parse(x_s("rs.getSecondaries();").gsub('connection to ', '').gsub(/(\w[^\s,]*\w)/, '"\1"'))
+    def secondary_names
+      x_s("rs.getSecondaries();").parse_psuedo_array.collect{|s| s.gsub('connection to ', '')}
     end
 
     def arbiter_names # pending - dummy
       []
     end
 
-    def servers # pending
-      []
+    def servers
+      node_list_as_ary.collect{|a| os = OpenStruct.new; os.host = a[0]; os.port = a[1]; os}
     end
   end
 end

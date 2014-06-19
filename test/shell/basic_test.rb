@@ -21,7 +21,7 @@ class ReplicaSetBasicTest < Test::Unit::TestCase
     ensure_cluster(:rs)
   end
 
-  def x_test_rs_methods
+  def test_rs_methods
     puts "@rs.repl_set_name:#{@rs.repl_set_name.inspect}"
     puts "@rs.repl_set_seeds:#{@rs.repl_set_seeds.inspect}"
     puts "@rs.repl_set_seeds_old:#{@rs.repl_set_seeds_old.inspect}"
