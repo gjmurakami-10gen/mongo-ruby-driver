@@ -4,13 +4,42 @@
 
 Selected Ruby replica set tests are passing with setup/teardown of replica set for each test, 25 seconds per test.
 
-see tasks/dev.rake for status of passing and failing tests
-- passing tests - basic client count max_values pinning replication_ack_test
-- failing tests - authentication complex_connect connection cursor insert query read_preference refresh ssl
-
 ## Work Items
 
 ### Pending
+
+- rs.ensure
+    ReplSetTest.prototype.ensureSet = function( options ) {
+        for(var i=0; i < this.ports.length; i++) {
+            if (!this.nodes[i].running()) {
+                this.restart( i, options );
+            }
+        }
+    }
+    
+    ReplSetTest.prototype.start = function( n , options , restart , wait ){
+      var rval = this.nodes[n] = MongoRunner.runMongod( options )
+    ReplSetTest.prototype.stop = function( n , signal, wait /* wait for stop */, opts ){
+      var ret = MongoRunner.stopMongod( port , signal, opts );
+    MongoRunner.stopMongod = function( port, signal, opts ){
+      var exitCode = stopMongod( parseInt( port ), parseInt( signal ), opts )
+
+    scope.injectNative( "stopMongod", StopMongoProgram );
+    BSONObj StopMongoProgram( const BSONObj &a, void* data ) {
+      ProcessId pid = ProcessId::fromNative(int( a.firstElement().number() ));
+      int code = killDb( port, ProcessId::fromNative(0), getSignal( a ), getStopMongodOpts( a ));
+    int killDb( int port, ProcessId _pid, int signal, const BSONObj& opt ) {
+      kill_wrapper( pid, signal, port, opt );
+    inline void kill_wrapper( ProcessId pid, int sig, int port, const BSONObj& opt ) {
+      TerminateProcess(registry._handles[pid], 1);
+      int x = kill( pid.toNative(), sig );
+
+    MongoRunner.runMongod = function( opts ){
+      var mongod = MongoRunner.startWithArgs(opts, waitForConnect);
+    MongoRunner.startWithArgs = function(argArray, waitForConnect) {
+      var pid = _startMongoProgram.apply(null, argArray);
+      conn = new Mongo("127.0.0.1:" + port);
+    
 
 - status/restart/reinitialize replica set - replica_set_test_restart
 - robustness for restart
@@ -20,33 +49,29 @@ see tasks/dev.rake for status of passing and failing tests
 - test cluster db directories
 - rake test:cleanup
 
-### Completed
+     ruby -e 'puts ARGF.read.gsub(/@rs/,"\n@rs").split("\n").grep(/^@rs/).sort.join("\n")' test/replica_set/*.rb | uniq
+     
+     pending
+     - @rs.add_node(n)
+     - @rs.config['host']
+     - @rs.member_by_name(pool.host_string).stop
+     - @rs.remove_secondary_node
+     - @rs.repl_set_get_status
+     - @rs.repl_set_remove_node(2)
+     - @rs.restart
+     - @rs.start
+     - @rs.stop_secondary
 
-- Ruby Mongo::Shell class interface to mongo shell
+### Development execution
 
-    - mongo output to logfile
-    - Mongo::Shell#sh output to IO arg (ex., StringIO)
-    - test_connect
-    - Ruby Mongo::Shell methods for replica set tests
-    - psuedo-array output parsing
-    - test/replica_set/basic_test.rb actually passes
-    - fit into driver test framework
-    - framework methods
+    $ > mongo_shell.log; time ruby -Ilib -Itest test/tools/framework_test.rb
+    $ rake dev:rs_passing
 
-    - Node#id #stop #kill restructuring with @conn string
-         
-         ruby -e 'puts ARGF.read.gsub(/@rs/,"\n@rs").split("\n").grep(/^@rs/).sort.join("\n")' test/replica_set/*.rb | uniq
-         
-         pending
-         - @rs.add_node(n)
-         - @rs.config['host']
-         - @rs.member_by_name(pool.host_string).stop
-         - @rs.remove_secondary_node
-         - @rs.repl_set_get_status
-         - @rs.repl_set_remove_node(2)
-         - @rs.restart
-         - @rs.start
-         - @rs.stop_secondary
+see tasks/dev.rake for status of passing and failing tests
+- passing tests - basic client count max_values pinning replication_ack_test
+- failing tests - authentication complex_connect connection cursor insert query read_preference refresh ssl
+
+### Repositories
                  
 - mongo-ruby-driver/1.x-stable-cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo-ruby-driver/tree/1.x-stable-cluster-test
 - mongo/cluster-test initial commit to https://github.com/gjmurakami-10gen/mongo/tree/cluster-test
@@ -164,7 +189,7 @@ see tasks/dev.rake for status of passing and failing tests
     rs.liveNodes                    rs.waitForIndicator(
     rs.name                         rs.waitForMaster(
     rs.nodeList(                    rs.waitForState(
-    > var nodes = rs.startSet();
+    > rs.startSet();
     ...
     > rs.initiate();
     ...
@@ -226,3 +251,16 @@ see tasks/dev.rake for status of passing and failing tests
 - [mock_replica_set_test.cpp](https://github.com/mongodb/mongo/blob/master/src/mongo/dbtests/mock_replica_set_test.cpp)
 
 {"set" : "test","date" : ISODate("2014-06-19T16:05:53Z"),"myState" : 1,"members" : [{"_id" : 0,"name" : "osprey.local:31000","health" : 1,"state" : 1,"stateStr" : "PRIMARY","uptime" : 671,"optime" : Timestamp(1403193283, 1),"optimeDate" : ISODate("2014-06-19T15:54:43Z"),"electionTime" : Timestamp(1403193293, 1),"electionDate" : ISODate("2014-06-19T15:54:53Z"),"self" : true},{"_id" : 1,"name" : "osprey.local:31001","health" : 1,"state" : 2,"stateStr" : "SECONDARY","uptime" : 670,"optime" : Timestamp(1403193283, 1),"optimeDate" : ISODate("2014-06-19T15:54:43Z"),"lastHeartbeat" : ISODate("2014-06-19T16:05:52Z"),"lastHeartbeatRecv" : ISODate("2014-06-19T16:05:52Z"),"pingMs" : 0,"syncingTo" : "osprey.local:31000"},{"_id" : 2,"name" : "osprey.local:31002","health" : 1,"state" : 2,"stateStr" : "SECONDARY","uptime" : 668,"optime" : Timestamp(1403193283, 1),"optimeDate" : ISODate("2014-06-19T15:54:43Z"),"lastHeartbeat" : ISODate("2014-06-19T16:05:52Z"),"lastHeartbeatRecv" : ISODate("2014-06-19T16:05:52Z"),"pingMs" : 0,"syncingTo" : "osprey.local:31000"}],"ok" : 1
+
+## xinspect
+
+    function xinspect(o,i){
+        if(typeof i=='undefined')i='';
+        if(i.length>50)return '[MAX ITERATIONS]';
+        var r=[];
+        for(var p in o){
+            var t=typeof o[p];
+            r.push(i+'"'+p+'" ('+t+') => '+(t=='object' ? 'object:'+xinspect(o[p],i+'  ') : o[p]+''));
+        }
+        return r.join(i+'\n');
+    }

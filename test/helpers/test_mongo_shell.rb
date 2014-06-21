@@ -60,8 +60,10 @@ module Mongo
       end
 
       def stop
-        result = @rs.x_s("rs.stop(#{id.inspect});")
+        @id = id
+        result = @rs.x_s("rs.stop(#{@id.inspect});")
         raise result unless /shell: stopped mongo program/.match(result)
+        @id
       end
     end
 
@@ -250,13 +252,15 @@ class Test::Unit::TestCase
   include Mongo
   include BSON
 
+  PORT = 30001
+
   def ensure_cluster(kind=nil, opts={})
     case kind
       when :rs
         default_opts = {:name => 'test', :nodes => 3, :startPort => 31000}
         opts = default_opts.merge(opts)
         unless defined? @@rs
-          @@rs = Mongo::Shell.new
+          @@rs = Mongo::Shell.new(:port => PORT)
           #pp @@rs.socket.methods.sort
         end
         if @@rs.x_s("typeof rs;") == "object"

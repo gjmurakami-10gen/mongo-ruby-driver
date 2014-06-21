@@ -53,4 +53,22 @@ class ReplicaSetBasicTest < Test::Unit::TestCase
     puts "@rs.replicas:#{@rs.replicas.inspect}"
   end
 
+  def test_rs_restart
+    sio = StringIO.new
+    #system("pgrep -fl mongod")
+    #puts @rs.status
+    puts "******** @rs.primary.stop ********"
+    id = @rs.primary.stop
+    #system("pgrep -fl mongod")
+    puts @rs.status
+    puts "******** @rs.sh(\"rs.restart(#{id});\") ********"
+    puts @rs.sh("rs.restart(#{id});")
+    puts @rs.sh("rs.awaitSecondaryNodes();")
+    #system("pgrep -fl mongod")
+    puts @rs.status
+  end
+
+  def test_config
+    puts @rs.sh("rs.getReplSetConfig()")
+  end
 end

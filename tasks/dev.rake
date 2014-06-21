@@ -19,13 +19,13 @@ FAILING_TESTS = %w{
   ssl
 }
 
-# authentication - pending
-# complex_connect - @rs.start
-# cursor - @read is nil
+# authentication - mongod without --auth, 3 failures
+# complex_connect - @rs.start # excluded in testing.rake
+# cursor - @read is nil # excluded in testing.rake
 # insert - @rs.start
-# read_preferences - @rs.config @rs.restart
+# read_preferences - @rs.config @rs.restart # excluded in testing.rake
 # refresh_test - @rs.member_by_name @rs.restart @rs.stop_secondary # @rs.add_node(n) @rs.remove_secondary_node @rs.repl_set_remove_node(2)
-# ssl - pending
+# ssl - # excluded in testing.rake
 
 SKIP_TESTS = %w{
   framework
