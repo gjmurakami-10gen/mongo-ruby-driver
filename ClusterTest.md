@@ -6,17 +6,28 @@ Selected Ruby replica set tests are passing with setup/teardown of replica set f
 
 ## Work Items
 
+- cluster_test.js JavaScript file on load,
+
+    enables JS code development and migration from Ruby to JS and eventually to mongo shell source code
+
 ### Pending
 
 - rs.ensure
     ReplSetTest.prototype.ensureSet = function( options ) {
         for(var i=0; i < this.ports.length; i++) {
-            if (!this.nodes[i].running()) {
+            if (!this.nodes[i].running()) { //
                 this.restart( i, options );
             }
         }
     }
-    
+
+    ReplSetTest.prototype.status = function( timeout ){
+        var master = this.callIsMaster()
+        if( ! master ) master = this.liveNodes.slaves[0]
+        return master.getDB("admin").runCommand({replSetGetStatus: 1})
+    }
+
+
     ReplSetTest.prototype.start = function( n , options , restart , wait ){
       var rval = this.nodes[n] = MongoRunner.runMongod( options )
     ReplSetTest.prototype.stop = function( n , signal, wait /* wait for stop */, opts ){
@@ -41,6 +52,7 @@ Selected Ruby replica set tests are passing with setup/teardown of replica set f
       conn = new Mongo("127.0.0.1:" + port);
     
 
+- repl_set_seeds_uri # see ReplSetTest.prototype.getURL
 - status/restart/reinitialize replica set - replica_set_test_restart
 - robustness for restart
 

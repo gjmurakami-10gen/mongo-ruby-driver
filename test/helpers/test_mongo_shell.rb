@@ -60,16 +60,15 @@ module Mongo
       end
 
       def stop
-        @id = id
-        result = @rs.x_s("rs.stop(#{@id.inspect});")
+        result = @rs.x_s("rs.stop(#{id.inspect});")
         raise result unless /shell: stopped mongo program/.match(result)
-        @id
       end
     end
 
     MONGO = '../mongo/mongo'
     CMD = %W{#{MONGO} --nodb --shell --listen}
     PORT = 30001
+    MONGO_TEST_FRAMEWORK_JS = 'test/tools/cluster_test.js'
     MONGO_LOG = ['mongo_shell.log', 'w']
     DEFAULT_OPTS = {:port => PORT, :out => STDOUT, :mongo_out => MONGO_LOG, :mongo_err => MONGO_LOG}
     RETRIES = 10
@@ -91,7 +90,7 @@ module Mongo
     # @return [true, false] true if mongo shell process was spawned
     def spawn
       unless @pid
-        cmd = CMD << @opts[:port].to_s
+        cmd = CMD << @opts[:port].to_s << MONGO_TEST_FRAMEWORK_JS
         opts = {}
         opts[:out] = @opts[:mongo_out] if @opts[:mongo_out]
         opts[:err] = @opts[:mongo_err] if @opts[:mongo_err]
@@ -252,15 +251,13 @@ class Test::Unit::TestCase
   include Mongo
   include BSON
 
-  PORT = 30001
-
   def ensure_cluster(kind=nil, opts={})
     case kind
       when :rs
         default_opts = {:name => 'test', :nodes => 3, :startPort => 31000}
         opts = default_opts.merge(opts)
         unless defined? @@rs
-          @@rs = Mongo::Shell.new(:port => PORT)
+          @@rs = Mongo::Shell.new
           #pp @@rs.socket.methods.sort
         end
         if @@rs.x_s("typeof rs;") == "object"
