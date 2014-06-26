@@ -23,7 +23,6 @@ class ReplicaSetClientTest < Test::Unit::TestCase
 
   def teardown
     @client.close if @client
-    stop_cluster(:rs)
   end
 
   def test_reconnection

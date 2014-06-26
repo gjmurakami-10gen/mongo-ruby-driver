@@ -2,10 +2,50 @@
 
 ## Status
 
-Selected Ruby replica set tests are passing without full teardown of replica set
+Ruby replica set tests run in less than 3 minutes - authentication issues - 1 failure and 4 errors
 
 - fast replica set test restart working without full teardown overhead!
 
+    $ TEST_OPTS=-v time bundle exec rake test:replica_set
+    ...
+    Finished in 169.011492 seconds.
+    
+    96 tests, 2813 assertions, 1 failures, 4 errors, 0 pendings, 0 omissions, 0 notifications
+    94.7917% passed
+    
+    0.57 tests/s, 16.64 assertions/s
+    Coverage report generated for Unit Tests to /Users/gjm/10gen/mongo-ruby-driver/coverage. 2836 / 4472 LOC (63.42%) covered.
+    [33m[Coveralls] Outside the Travis environment, not sending data.[0m
+    rake aborted!
+    Command failed with status (1): [ruby -I"lib:test" -I"/Users/gjm/.rvm/gems/ruby-2.1.1/gems/rake-10.1.1/lib" "/Users/gjm/.rvm/gems/ruby-2.1.1/gems/rake-10.1.1/lib/rake/rake_test_loader.rb"
+     "test/replica_set/authentication_test.rb"
+     "test/replica_set/basic_test.rb"
+     "test/replica_set/client_test.rb"
+     "test/replica_set/connection_test.rb"
+     "test/replica_set/cursor_test.rb"
+     "test/replica_set/insert_test.rb"
+     "test/replica_set/max_values_test.rb"
+     "test/replica_set/pinning_test.rb"
+     "test/replica_set/query_test.rb"
+     "test/replica_set/refresh_test.rb"
+     "test/replica_set/replication_ack_test.rb" -v]
+    
+    Tasks: TOP => test:replica_set
+    (See full trace by running task with --trace)
+          173.89 real         7.08 user         6.64 sys
+
+    Failing tests:
+    Failure: test_auth_error(ReplicaSetAuthenticationTest)
+    Error: test_auth_error_unordered(ReplicaSetAuthenticationTest)
+    Error: test_auth_no_error(ReplicaSetAuthenticationTest)
+    Error: test_duplicate_key_with_auth_error(ReplicaSetAuthenticationTest)
+    Error: test_duplicate_key_with_auth_error_unordered(ReplicaSetAuthenticationTest)
+    
+    # complex_connect # excluded in testing.rake
+    # read_preferences # excluded in testing.rake
+    # refresh_test # commented out - @rs.add_node(n) @rs.remove_secondary_node @rs.repl_set_remove_node(2)
+    # ssl # excluded in testing.rake
+      
 ## Work Items
 
 ### Pending

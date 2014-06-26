@@ -32,6 +32,8 @@ end
 module Mongo
   # A Mongo shell for cluster testing with methods for socket communication and testing convenience.
   # IO is synchronous with delimiters such as the prompt "> ".
+  # Methods are for 1.x-stable compatibility but should be minimized for 2.x
+  # Full documentation is pending.
   class Shell
 
     class Node
@@ -67,13 +69,17 @@ module Mongo
 
     MONGO = '../mongo/mongo'
     CMD = %W{#{MONGO} --nodb --shell --listen}
-    PORT = 30001
+    MONGO_PORT = 30001
     MONGO_TEST_FRAMEWORK_JS = 'test/tools/cluster_test.js'
     MONGO_LOG = ['mongo_shell.log', 'w']
-    DEFAULT_OPTS = {:port => PORT, :out => STDOUT, :mongo_out => MONGO_LOG, :mongo_err => MONGO_LOG}
+    DEFAULT_OPTS = {:port => MONGO_PORT, :out => STDOUT, :mongo_out => MONGO_LOG, :mongo_err => MONGO_LOG}
     RETRIES = 10
     PROMPT = %r{> $}m
     BYE = %r{^bye\n$}m
+
+    REPL_SET_NAME = 'test'
+    REPL_SET_NODES = 3
+    REPL_SET_START_PORT = 31000
 
     attr_reader :socket
 
@@ -114,7 +120,7 @@ module Mongo
           spawn || sleep(1)
         end
       end
-      abort("Error on connect to mongo shell after #{RETRIES} retries: #{ex}")
+      raise("Error on connect to mongo shell after #{RETRIES} retries: #{ex}")
     end
 
     public
@@ -166,7 +172,7 @@ module Mongo
       s.split("\n").each{|line| line += "\n"; out.write(line); out.flush; out.write x(line); out.flush}
     end
 
-    def replica_set_test_start(opts = { :name => 'test', :nodes => 3, :startPort => 31000 })
+    def replica_set_test_start(opts = { :name => REPL_SET_NAME, :nodes => REPL_SET_NODES, :startPort => REPL_SET_START_PORT })
       sio = StringIO.new
       sh("var rs = new ReplSetTest( #{opts.to_json} );", sio)
       sh("rs.startSet();", sio)
@@ -193,6 +199,9 @@ module Mongo
       raise sio.string unless /ReplSetTest awaitReplication: finished: all/.match(sio.string)
       sio.string
     end
+
+    alias_method :start, :replica_set_test_restart
+    alias_method :restart, :replica_set_test_restart
 
     def status
       x_s("rs.status();")
@@ -246,6 +255,20 @@ module Mongo
     def repl_set_seeds_uri
       repl_set_seeds.join(',')
     end
+
+    def config
+      result = x_json("rs.getReplSetConfig()")
+      result['host'] = result['members'].first['host'].split(':').first
+      result
+    end
+
+    def member_by_name(host_port)
+      nodes.find{|node| node.host_port == host_port}
+    end
+
+    def stop_secondary
+      secondaries.sample.stop
+    end
   end
 end
 
@@ -268,18 +291,6 @@ class Test::Unit::TestCase
         end
         @rs = @@rs
     end
-  end
-
-  def stop_cluster(kind=nil, opts={})
-    # case kind
-    #   when :rs
-    #     @@rs.replica_set_test_stop
-    # end
-    # if defined? @@rs
-    #   puts "nodes.length:#{@@rs.nodes.length} nodes:"
-    #   pp @@rs.nodes
-    #   system("pgrep -fl mongo")
-    # end
   end
 end
 

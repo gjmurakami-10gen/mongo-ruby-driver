@@ -26,7 +26,6 @@ class ReplicaSetQueryTest < Test::Unit::TestCase
 
   def teardown
     @client.close if @conn
-    stop_cluster(:rs)
   end
 
   def test_query

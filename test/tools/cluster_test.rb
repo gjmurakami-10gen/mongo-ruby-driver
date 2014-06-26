@@ -21,10 +21,6 @@ class ReplicaSetBasicTest < Test::Unit::TestCase
     ensure_cluster(:rs)
   end
 
-  def teardown
-    stop_cluster(:rs)
-  end
-
   def test_rs_methods
     if defined? Mongo::Shell
       puts "@rs.nodes:#{@rs.nodes.inspect}"
@@ -71,6 +67,11 @@ class ReplicaSetBasicTest < Test::Unit::TestCase
   end
 
   def test_config
-    puts @rs.sh("rs.getReplSetConfig()")
+    pp @rs.config
+  end
+
+  def test_member_by_name
+    host_port = "scherzo.local:31002"
+    pp @rs.member_by_name(host_port)
   end
 end

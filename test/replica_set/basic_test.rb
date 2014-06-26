@@ -20,10 +20,6 @@ class ReplicaSetBasicTest < Test::Unit::TestCase
     ensure_cluster(:rs)
   end
 
-  def teardown
-    stop_cluster(:rs)
-  end
-
   def test_connect
     client = MongoReplicaSetClient.new(@rs.repl_set_seeds, :name => @rs.repl_set_name)
     assert client.connected?

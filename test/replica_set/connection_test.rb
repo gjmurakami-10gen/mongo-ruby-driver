@@ -20,10 +20,6 @@ class ReplicaSetConnectionTest < Test::Unit::TestCase
     ensure_cluster(:rs)
   end
 
-  def teardown
-    stop_cluster(:rs)
-  end
-
   def test_connect_with_deprecated_multi
     silently do
       @connection = Connection.multi(@rs.repl_set_seeds_old, :name => @rs.repl_set_name)
