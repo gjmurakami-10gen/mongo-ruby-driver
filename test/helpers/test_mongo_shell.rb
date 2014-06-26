@@ -55,12 +55,12 @@ module Mongo
       end
 
       def kill(signal = Signal.list['KILL'])
-        result = @rs.x_s("rs.stop(#{id.inspect},#{signal.inspect});")
+        result = @rs.x_s("rs.stop(#{id.inspect},#{signal.inspect},true);")
         raise result unless /shell: stopped mongo program/.match(result)
       end
 
       def stop
-        result = @rs.x_s("rs.stop(#{id.inspect});")
+        result = @rs.x_s("rs.stop(#{id.inspect},true);")
         raise result unless /shell: stopped mongo program/.match(result)
       end
     end
@@ -186,10 +186,12 @@ module Mongo
     end
 
     def replica_set_test_restart
-      <<-EOF.pretrim_lines
-        rs.reInitiate(60000);
-        rs.awaitReplication();
-      EOF
+      sio = StringIO.new
+      sh("rs.restartSet();", sio)
+      sh("rs.awaitSecondaryNodes(30000);", sio)
+      sh("rs.awaitReplication(30000);", sio)
+      raise sio.string unless /ReplSetTest awaitReplication: finished: all/.match(sio.string)
+      sio.string
     end
 
     def status
@@ -258,12 +260,9 @@ class Test::Unit::TestCase
         opts = default_opts.merge(opts)
         unless defined? @@rs
           @@rs = Mongo::Shell.new
-          #pp @@rs.socket.methods.sort
         end
         if @@rs.x_s("typeof rs;") == "object"
-          #puts "@@rs.status:\n"
-          #puts @@rs.status
-          @@rs.replica_set_test_start(opts)
+          @@rs.replica_set_test_restart
         else
           @@rs.replica_set_test_start(opts)
         end
@@ -272,14 +271,26 @@ class Test::Unit::TestCase
   end
 
   def stop_cluster(kind=nil, opts={})
-    case kind
-      when :rs
-        @@rs.replica_set_test_stop
-    end
+    # case kind
+    #   when :rs
+    #     @@rs.replica_set_test_stop
+    # end
+    # if defined? @@rs
+    #   puts "nodes.length:#{@@rs.nodes.length} nodes:"
+    #   pp @@rs.nodes
+    #   system("pgrep -fl mongo")
+    # end
   end
 end
 
 Test::Unit.at_exit do
-  TEST_BASE.class_eval { class_variable_get(:@@rs).exit }
+  TEST_BASE.class_eval do
+    begin
+      rs = class_variable_get(:@@rs)
+      rs.replica_set_test_stop
+      rs.exit
+    rescue
+    end
+  end
 end
 

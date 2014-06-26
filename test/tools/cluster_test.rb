@@ -67,6 +67,7 @@ class ReplicaSetBasicTest < Test::Unit::TestCase
     puts @rs.sh("rs.awaitReplication();")
     system("pgrep -fl mongod")
     puts @rs.status
+    @@rs.replica_set_test_restart
   end
 
   def test_config

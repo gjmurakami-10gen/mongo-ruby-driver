@@ -2,13 +2,11 @@
 
 ## Status
 
-Selected Ruby replica set tests are passing with setup/teardown of replica set for each test, 25 seconds per test.
+Selected Ruby replica set tests are passing without full teardown of replica set
+
+- fast replica set test restart working without full teardown overhead!
 
 ## Work Items
-
-- cluster_test.js JavaScript file on load,
-
-    enables JS code development and migration from Ruby to JS and eventually to mongo shell source code
 
 ### Pending
 
@@ -26,31 +24,6 @@ Selected Ruby replica set tests are passing with setup/teardown of replica set f
         if( ! master ) master = this.liveNodes.slaves[0]
         return master.getDB("admin").runCommand({replSetGetStatus: 1})
     }
-
-
-    ReplSetTest.prototype.start = function( n , options , restart , wait ){
-      var rval = this.nodes[n] = MongoRunner.runMongod( options )
-    ReplSetTest.prototype.stop = function( n , signal, wait /* wait for stop */, opts ){
-      var ret = MongoRunner.stopMongod( port , signal, opts );
-    MongoRunner.stopMongod = function( port, signal, opts ){
-      var exitCode = stopMongod( parseInt( port ), parseInt( signal ), opts )
-
-    scope.injectNative( "stopMongod", StopMongoProgram );
-    BSONObj StopMongoProgram( const BSONObj &a, void* data ) {
-      ProcessId pid = ProcessId::fromNative(int( a.firstElement().number() ));
-      int code = killDb( port, ProcessId::fromNative(0), getSignal( a ), getStopMongodOpts( a ));
-    int killDb( int port, ProcessId _pid, int signal, const BSONObj& opt ) {
-      kill_wrapper( pid, signal, port, opt );
-    inline void kill_wrapper( ProcessId pid, int sig, int port, const BSONObj& opt ) {
-      TerminateProcess(registry._handles[pid], 1);
-      int x = kill( pid.toNative(), sig );
-
-    MongoRunner.runMongod = function( opts ){
-      var mongod = MongoRunner.startWithArgs(opts, waitForConnect);
-    MongoRunner.startWithArgs = function(argArray, waitForConnect) {
-      var pid = _startMongoProgram.apply(null, argArray);
-      conn = new Mongo("127.0.0.1:" + port);
-    
 
 - repl_set_seeds_uri # see ReplSetTest.prototype.getURL
 - status/restart/reinitialize replica set - replica_set_test_restart
@@ -257,6 +230,31 @@ see tasks/dev.rake for status of passing and failing tests
 
 - [dup2](https://github.com/mongodb/mongo/blob/master/src/mongo/shell/shell_utils_launcher.cpp#L453)
 
+### mongo program - start/stop/run calling sequence
+
+    ReplSetTest.prototype.start = function( n , options , restart , wait ){
+      var rval = this.nodes[n] = MongoRunner.runMongod( options )
+    ReplSetTest.prototype.stop = function( n , signal, wait /* wait for stop */, opts ){
+      var ret = MongoRunner.stopMongod( port , signal, opts );
+    MongoRunner.stopMongod = function( port, signal, opts ){
+      var exitCode = stopMongod( parseInt( port ), parseInt( signal ), opts )
+
+    scope.injectNative( "stopMongod", StopMongoProgram );
+    BSONObj StopMongoProgram( const BSONObj &a, void* data ) {
+      ProcessId pid = ProcessId::fromNative(int( a.firstElement().number() ));
+      int code = killDb( port, ProcessId::fromNative(0), getSignal( a ), getStopMongodOpts( a ));
+    int killDb( int port, ProcessId _pid, int signal, const BSONObj& opt ) {
+      kill_wrapper( pid, signal, port, opt );
+    inline void kill_wrapper( ProcessId pid, int sig, int port, const BSONObj& opt ) {
+      TerminateProcess(registry._handles[pid], 1);
+      int x = kill( pid.toNative(), sig );
+
+    MongoRunner.runMongod = function( opts ){
+      var mongod = MongoRunner.startWithArgs(opts, waitForConnect);
+    MongoRunner.startWithArgs = function(argArray, waitForConnect) {
+      var pid = _startMongoProgram.apply(null, argArray);
+      conn = new Mongo("127.0.0.1:" + port);
+    
 ## mock_replica_set
 
 - [mock_replica_set.h](https://github.com/mongodb/mongo/blob/master/src/mongo/dbtests/mock/mock_replica_set.h)

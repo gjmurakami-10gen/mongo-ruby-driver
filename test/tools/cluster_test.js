@@ -1,16 +1,13 @@
 ReplSetTest.prototype.restartSet = function() {
-    for(var i=0; i<this.nodes.length; i++) {
+
+    for (var i = 0; i < this.nodes.length; i++) {
         try {
-            var reply = this.nodes[0].getDB('admin').runCommand({ismaster: 1});
-            print("nodes[0]:");
-            printjson(reply);
+            this.nodes[i].getDB('admin').runCommand({ismaster: 1});
         }
         catch (err) {
-            print("nodes[0] - ismaster failed\n");
             this.restart(i);
         }
     }
-};
 
-
-
+    return this.nodes;
+}
