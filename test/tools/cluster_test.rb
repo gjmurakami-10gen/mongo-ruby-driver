@@ -58,9 +58,9 @@ class ReplicaSetBasicTest < Test::Unit::TestCase
     system("pgrep -fl mongod")
     puts @rs.status
     puts "******** restartSet ********"
-    puts @rs.sh("rs.restartSet();")
-    puts @rs.sh("rs.awaitSecondaryNodes();")
-    puts @rs.sh("rs.awaitReplication();")
+    puts @rs.sh("#{@rs.var}.restartSet();")
+    puts @rs.sh("#{@rs.var}.awaitSecondaryNodes();")
+    puts @rs.sh("#{@rs.var}.awaitReplication();")
     system("pgrep -fl mongod")
     puts @rs.status
     @@rs.restart

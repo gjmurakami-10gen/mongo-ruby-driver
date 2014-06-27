@@ -141,13 +141,15 @@ module Mongo
     REPL_SET_NAME = 'test'
     REPL_SET_NODES = 3
     REPL_SET_START_PORT = 31000
+    VAR = 'rs'
 
     class Node
-      attr_reader :rs, :conn, :host_port, :host, :port
+      attr_reader :rs, :conn, :var, :host_port, :host, :port
 
       def initialize(rs, conn)
         @rs = rs
         @conn = conn
+        @var = @rs.var
         @host_port = conn.sub('connection to ', '')
         @host_port = host_port
         @host, @port = host_port.split(':')
@@ -159,22 +161,25 @@ module Mongo
       end
 
       def id
-        @rs.x_s("rs.getNodeId(#{@conn.inspect});").to_i
+        @rs.x_s("#{var}.getNodeId(#{@conn.inspect});").to_i
       end
 
       def kill(signal = Signal.list['KILL'])
-        result = @rs.x_s("rs.stop(#{id.inspect},#{signal.inspect},true);")
+        result = @rs.x_s("#{var}.stop(#{id.inspect},#{signal.inspect},true);")
         raise result unless /shell: stopped mongo program/.match(result)
       end
 
       def stop
-        result = @rs.x_s("rs.stop(#{id.inspect},true);")
+        result = @rs.x_s("#{var}.stop(#{id.inspect},true);")
         raise result unless /shell: stopped mongo program/.match(result)
       end
     end
 
-    def initialize(ms)
+    attr_reader :var
+
+    def initialize(ms, var = VAR)
       @ms = ms
+      @var = var
     end
 
     def x_s(s, prompt = Mongo::Shell::PROMPT)
@@ -191,46 +196,46 @@ module Mongo
 
     def start(opts = { :name => REPL_SET_NAME, :nodes => REPL_SET_NODES, :startPort => REPL_SET_START_PORT })
       sio = StringIO.new
-      sh("var rs = new ReplSetTest( #{opts.to_json} );", sio)
-      sh("rs.startSet();", sio)
+      sh("var #{var} = new ReplSetTest( #{opts.to_json} );", sio)
+      sh("#{var}.startSet();", sio)
       raise sio.string unless /ReplSetTest Starting/.match(sio.string)
-      sh("rs.initiate();", sio)
+      sh("#{var}.initiate();", sio)
       raise sio.string unless /Config now saved locally.  Should come online in about a minute./.match(sio.string)
-      sh("rs.awaitReplication();", sio)
+      sh("#{var}.awaitReplication();", sio)
       raise sio.string unless /ReplSetTest awaitReplication: finished: all/.match(sio.string)
       sio.string
     end
 
     def exists?
-      x_s("typeof rs;") == "object"
+      x_s("typeof #{var};") == "object"
     end
 
     def stop
       sio = StringIO.new
-      sh("rs.stopSet();", sio)
+      sh("#{var}.stopSet();", sio)
       raise sio.string unless /ReplSetTest stopSet \*\*\* Shut down repl set - test worked \*\*\*/.match(sio.string)
       sio.string
     end
 
     def restart
       sio = StringIO.new
-      sh("rs.restartSet();", sio)
-      sh("rs.awaitSecondaryNodes(30000);", sio)
-      sh("rs.awaitReplication(30000);", sio)
+      sh("#{var}.restartSet();", sio)
+      sh("#{var}.awaitSecondaryNodes(30000);", sio)
+      sh("#{var}.awaitReplication(30000);", sio)
       raise sio.string unless /ReplSetTest awaitReplication: finished: all/.match(sio.string)
       sio.string
     end
 
     def status
-      x_s("rs.status();")
+      x_s("#{var}.status();")
     end
 
     def nodes
-      Node.a_from_list(self, x_s("rs.nodes;").parse_psuedo_array)
+      Node.a_from_list(self, x_s("#{var}.nodes;").parse_psuedo_array)
     end
 
     def primary
-      Node.new(self, x_s("rs.getPrimary();"))
+      Node.new(self, x_s("#{var}.getPrimary();"))
     end
 
     def primary_name
@@ -238,7 +243,7 @@ module Mongo
     end
 
     def secondaries
-      Node.a_from_list(self, x_s("rs.getSecondaries();").parse_psuedo_array)
+      Node.a_from_list(self, x_s("#{var}.getSecondaries();").parse_psuedo_array)
     end
 
     def secondary_names
@@ -254,7 +259,7 @@ module Mongo
     end
 
     def node_list
-      x_json("rs.nodeList();")
+      x_json("#{var}.nodeList();")
     end
 
     def node_list_as_ary
@@ -262,7 +267,7 @@ module Mongo
     end
 
     def repl_set_name
-      x_s("rs.name;")
+      x_s("#{var}.name;")
     end
 
     alias_method :repl_set_seeds, :node_list
@@ -275,7 +280,7 @@ module Mongo
     end
 
     def config
-      result = x_json("rs.getReplSetConfig()")
+      result = x_json("#{var}.getReplSetConfig()")
       result['host'] = result['members'].first['host'].split(':').first
       result
     end
@@ -301,7 +306,7 @@ class Test::Unit::TestCase
     case kind
       when :rs
         unless defined? @@rs
-          @@rs = Mongo::ReplSetTest.new(@@ms)
+          @@rs = Mongo::ReplSetTest.new(@@ms, 'rs')
         end
         if @@rs.exists?
           @@rs.restart

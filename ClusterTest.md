@@ -48,7 +48,8 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
       
 ## Work Items
 
-- refactor ReplSetTest out of Shell
+- ReplSetTest refactoring out of Shell
+- JS var name for ReplSetTest, allows multiple object instances
 
 - data directory parameter
 - move Mongo::Shell code to cluster_test.js
