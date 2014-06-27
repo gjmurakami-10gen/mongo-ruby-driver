@@ -53,7 +53,7 @@ class ComplexConnectTest < Test::Unit::TestCase
     assert_raise ConnectionFailure do
       primary['admin'].command({:replSetReconfig => config})
     end
-    @rs.start
+    @rs.restart
 
     assert_raise ConnectionFailure do
       perform_step_down(primary)

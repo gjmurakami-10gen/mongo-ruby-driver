@@ -35,38 +35,6 @@ module Mongo
   # Methods are for 1.x-stable compatibility but should be minimized for 2.x
   # Full documentation is pending.
   class Shell
-
-    class Node
-      attr_reader :rs, :conn, :host_port, :host, :port
-
-      def initialize(rs, conn)
-        @rs = rs
-        @conn = conn
-        @host_port = conn.sub('connection to ', '')
-        @host_port = host_port
-        @host, @port = host_port.split(':')
-        @port = @port.to_i
-      end
-
-      def self.a_from_list(rs, list)
-        list.collect{|s| Node.new(rs, s)}
-      end
-
-      def id
-        @rs.x_s("rs.getNodeId(#{@conn.inspect});").to_i
-      end
-
-      def kill(signal = Signal.list['KILL'])
-        result = @rs.x_s("rs.stop(#{id.inspect},#{signal.inspect},true);")
-        raise result unless /shell: stopped mongo program/.match(result)
-      end
-
-      def stop
-        result = @rs.x_s("rs.stop(#{id.inspect},true);")
-        raise result unless /shell: stopped mongo program/.match(result)
-      end
-    end
-
     MONGO = '../mongo/mongo'
     CMD = %W{#{MONGO} --nodb --shell --listen}
     MONGO_PORT = 30001
@@ -77,11 +45,7 @@ module Mongo
     PROMPT = %r{> $}m
     BYE = %r{^bye\n$}m
 
-    REPL_SET_NAME = 'test'
-    REPL_SET_NODES = 3
-    REPL_SET_START_PORT = 31000
-
-    attr_reader :socket
+    attr_reader :out, :socket
 
     def initialize(opts = {})
       @opts = DEFAULT_OPTS.merge(opts)
@@ -171,8 +135,61 @@ module Mongo
     def sh(s, out = @out)
       s.split("\n").each{|line| line += "\n"; out.write(line); out.flush; out.write x(line); out.flush}
     end
+  end
 
-    def replica_set_test_start(opts = { :name => REPL_SET_NAME, :nodes => REPL_SET_NODES, :startPort => REPL_SET_START_PORT })
+  class ReplSetTest
+    REPL_SET_NAME = 'test'
+    REPL_SET_NODES = 3
+    REPL_SET_START_PORT = 31000
+
+    class Node
+      attr_reader :rs, :conn, :host_port, :host, :port
+
+      def initialize(rs, conn)
+        @rs = rs
+        @conn = conn
+        @host_port = conn.sub('connection to ', '')
+        @host_port = host_port
+        @host, @port = host_port.split(':')
+        @port = @port.to_i
+      end
+
+      def self.a_from_list(rs, list)
+        list.collect{|s| Node.new(rs, s)}
+      end
+
+      def id
+        @rs.x_s("rs.getNodeId(#{@conn.inspect});").to_i
+      end
+
+      def kill(signal = Signal.list['KILL'])
+        result = @rs.x_s("rs.stop(#{id.inspect},#{signal.inspect},true);")
+        raise result unless /shell: stopped mongo program/.match(result)
+      end
+
+      def stop
+        result = @rs.x_s("rs.stop(#{id.inspect},true);")
+        raise result unless /shell: stopped mongo program/.match(result)
+      end
+    end
+
+    def initialize(ms)
+      @ms = ms
+    end
+
+    def x_s(s, prompt = Mongo::Shell::PROMPT)
+      @ms.x_s(s, prompt)
+    end
+
+    def x_json(s, prompt = Mongo::Shell::PROMPT)
+      @ms.x_json(s, prompt)
+    end
+
+    def sh(s, out = @ms.out)
+      @ms.sh(s, out)
+    end
+
+    def start(opts = { :name => REPL_SET_NAME, :nodes => REPL_SET_NODES, :startPort => REPL_SET_START_PORT })
       sio = StringIO.new
       sh("var rs = new ReplSetTest( #{opts.to_json} );", sio)
       sh("rs.startSet();", sio)
@@ -184,14 +201,18 @@ module Mongo
       sio.string
     end
 
-    def replica_set_test_stop
+    def exists?
+      x_s("typeof rs;") == "object"
+    end
+
+    def stop
       sio = StringIO.new
       sh("rs.stopSet();", sio)
       raise sio.string unless /ReplSetTest stopSet \*\*\* Shut down repl set - test worked \*\*\*/.match(sio.string)
       sio.string
     end
 
-    def replica_set_test_restart
+    def restart
       sio = StringIO.new
       sh("rs.restartSet();", sio)
       sh("rs.awaitSecondaryNodes(30000);", sio)
@@ -199,9 +220,6 @@ module Mongo
       raise sio.string unless /ReplSetTest awaitReplication: finished: all/.match(sio.string)
       sio.string
     end
-
-    alias_method :start, :replica_set_test_restart
-    alias_method :restart, :replica_set_test_restart
 
     def status
       x_s("rs.status();")
@@ -277,17 +295,20 @@ class Test::Unit::TestCase
   include BSON
 
   def ensure_cluster(kind=nil, opts={})
+    unless defined? @@ms
+      @@ms = Mongo::Shell.new
+    end
     case kind
       when :rs
-        default_opts = {:name => 'test', :nodes => 3, :startPort => 31000}
-        opts = default_opts.merge(opts)
         unless defined? @@rs
-          @@rs = Mongo::Shell.new
+          @@rs = Mongo::ReplSetTest.new(@@ms)
         end
-        if @@rs.x_s("typeof rs;") == "object"
-          @@rs.replica_set_test_restart
+        if @@rs.exists?
+          @@rs.restart
         else
-          @@rs.replica_set_test_start(opts)
+          default_opts = {:name => 'test', :nodes => 3, :startPort => 31000}
+          opts = default_opts.merge(opts)
+          @@rs.start(opts)
         end
         @rs = @@rs
     end
@@ -298,8 +319,12 @@ Test::Unit.at_exit do
   TEST_BASE.class_eval do
     begin
       rs = class_variable_get(:@@rs)
-      rs.replica_set_test_stop
-      rs.exit
+      rs.stop
+    rescue
+    end
+    begin
+      ms = class_variable_get(:@@ms)
+      ms.exit
     rescue
     end
   end

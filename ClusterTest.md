@@ -48,6 +48,17 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
       
 ## Work Items
 
+- refactor ReplSetTest out of Shell
+
+- data directory parameter
+- move Mongo::Shell code to cluster_test.js
+- move cluster_test.js code to replsettest.js
+- fix 5 ReplicaSetAuthenticationTest failures/errors
+- sharded cluster test framework and tests
+  shardingtest.js
+- Perl - following iterative steps in plan
+- test environment setup - local, Jenkins, MCI - environment variable(?) - discuss with Mike O. and others
+
 ### Pending
 
 - rs.ensure
@@ -66,7 +77,7 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
     }
 
 - repl_set_seeds_uri # see ReplSetTest.prototype.getURL
-- status/restart/reinitialize replica set - replica_set_test_restart
+- status/restart/reinitialize replica set
 - robustness for restart
 
 - redirect log() output
@@ -222,7 +233,7 @@ see tasks/dev.rake for status of passing and failing tests
     ...
     > rs.stopSet();
     ...
-    > var st = new ShardingTest({shards : 2, mongos : 2, verbose : 0, separateConfig : 1});
+    > var st = new ShardingTestShardingTest({name: "test", shards: 2, rs: {nodes: 1}, mongos: 2, other: { separateConfig: true } })
     ...
     > st.
     st.admin                  st.getOther(              st.s

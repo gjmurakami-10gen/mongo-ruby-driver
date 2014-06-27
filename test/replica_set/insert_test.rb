@@ -44,7 +44,7 @@ class ReplicaSetInsertTest < Test::Unit::TestCase
     @coll.save({:a => 70}, :w => 1)
 
     # Restart the old master and wait for sync
-    @rs.start
+    @rs.restart
     sleep(5)
     results = []
 
