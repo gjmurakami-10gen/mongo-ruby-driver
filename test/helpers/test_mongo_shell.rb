@@ -142,6 +142,12 @@ module Mongo
     REPL_SET_NODES = 3
     REPL_SET_START_PORT = 31000
     VAR = 'rs'
+    DEFAULT_OPTS = {
+        :name => REPL_SET_NAME,
+        :nodes => REPL_SET_NODES,
+        :startPort => REPL_SET_START_PORT,
+        :path => '/data/db/'
+    }
 
     class Node
       attr_reader :rs, :conn, :var, :host_port, :host, :port
@@ -194,7 +200,8 @@ module Mongo
       @ms.sh(s, out)
     end
 
-    def start(opts = { :name => REPL_SET_NAME, :nodes => REPL_SET_NODES, :startPort => REPL_SET_START_PORT })
+    def start(opts = {})
+      opts = DEFAULT_OPTS.dup.merge(opts)
       sio = StringIO.new
       sh("var #{var} = new ReplSetTest( #{opts.to_json} );", sio)
       sh("#{var}.startSet();", sio)
@@ -311,9 +318,15 @@ class Test::Unit::TestCase
         if @@rs.exists?
           @@rs.restart
         else
-          default_opts = {:name => 'test', :nodes => 3, :startPort => 31000}
+          default_opts = {
+              :name => 'test',
+              :nodes => 3,
+              :startPort => 31000,
+              :dataPath => "#{Dir.getwd}/data/" # must be a full path
+          }
           opts = default_opts.merge(opts)
-          @@rs.start(opts)
+          FileUtils.mkdir_p(opts[:dataPath])
+          puts @@rs.start(opts)
         end
         @rs = @@rs
     end

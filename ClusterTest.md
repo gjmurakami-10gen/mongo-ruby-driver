@@ -12,24 +12,7 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
     
     96 tests, 2813 assertions, 1 failures, 4 errors, 0 pendings, 0 omissions, 0 notifications
     94.7917% passed
-    
-    0.57 tests/s, 16.64 assertions/s
-    Coverage report generated for Unit Tests to /Users/gjm/10gen/mongo-ruby-driver/coverage. 2836 / 4472 LOC (63.42%) covered.
-    [33m[Coveralls] Outside the Travis environment, not sending data.[0m
-    rake aborted!
-    Command failed with status (1): [ruby -I"lib:test" -I"/Users/gjm/.rvm/gems/ruby-2.1.1/gems/rake-10.1.1/lib" "/Users/gjm/.rvm/gems/ruby-2.1.1/gems/rake-10.1.1/lib/rake/rake_test_loader.rb"
-     "test/replica_set/authentication_test.rb"
-     "test/replica_set/basic_test.rb"
-     "test/replica_set/client_test.rb"
-     "test/replica_set/connection_test.rb"
-     "test/replica_set/cursor_test.rb"
-     "test/replica_set/insert_test.rb"
-     "test/replica_set/max_values_test.rb"
-     "test/replica_set/pinning_test.rb"
-     "test/replica_set/query_test.rb"
-     "test/replica_set/refresh_test.rb"
-     "test/replica_set/replication_ack_test.rb" -v]
-    
+    ...
     Tasks: TOP => test:replica_set
     (See full trace by running task with --trace)
           173.89 real         7.08 user         6.64 sys
@@ -49,16 +32,38 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
 ## Work Items
 
 - ReplSetTest refactoring out of Shell
-- JS var name for ReplSetTest, allows multiple object instances
+- JS var name for ReplSetTest, allows multiple instances
 
-- data directory parameter
-- move Mongo::Shell code to cluster_test.js
+- data directory parameter - getPath, this.path opt
+
+    replsettest.js
+        ReplSetTest.prototype.start
+            defaults = { dbpath : "$set-$node" }
+            var pathOpts = { node : n, set : this.name }
+            options.pathOpts = Object.merge( options.pathOpts || {}, pathOpts )
+            options.dbpath = this.getPath(n);
+            var rval = this.nodes[n] = MongoRunner.runMongod( options )
+    servers.js
+        MongoRunner.runMongod = function( opts )
+            opts = MongoRunner.mongodOptions( opts );
+            opts.dbpath = MongoRunner.toRealDir( opts.dbpath || "$dataDir/mongod-$port",
+                                                     opts.pathOpts )
+            path = MongoRunner.toRealPath( path, pathOpts )
+            path = path.replace( /\$dataPath/g, MongoRunner.dataPath )
+            path = path.replace( /\$dataDir/g, MongoRunner.dataDir )
+            path = MongoRunner.dataPath + path
+        MongoRunner.dataPath = "/data/db/"
+
 - move cluster_test.js code to replsettest.js
+
+- move Mongo::Shell code to cluster_test.js
 - fix 5 ReplicaSetAuthenticationTest failures/errors
 - sharded cluster test framework and tests
-  shardingtest.js
+    shardingtest.js
+
 - Perl - following iterative steps in plan
 - test environment setup - local, Jenkins, MCI - environment variable(?) - discuss with Mike O. and others
+- stopSet clears contents but does not remove directories
 
 ### Pending
 

@@ -74,4 +74,8 @@ class ReplicaSetBasicTest < Test::Unit::TestCase
     host_port = "scherzo.local:31002"
     pp @rs.member_by_name(host_port)
   end
+
+  def test_dbpath
+    assert true
+  end
 end
