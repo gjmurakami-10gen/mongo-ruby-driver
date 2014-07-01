@@ -29,37 +29,34 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
     # refresh_test # commented out - @rs.add_node(n) @rs.remove_secondary_node @rs.repl_set_remove_node(2)
     # ssl # excluded in testing.rake
       
+## mongo shell test framework essentials
+
+- based on mongo shell ReplSetTest and ShardingTest objects
+- language interface communicates via socket to the mongo shell
+- requests are JavaScript statements, responses are mixed text and JSON
+- mongo-ruby-driver Mongo::Shell, Mongo::ReplSetTest, Mongo::ReplSetTest::Node classes
+  - methods provided for nodes, primary, secondaries, uri, kill, stop
+  - runs 96 replica set tests in less than 3 minutes
+  - the replica set is not shutdown after each test, instead nodes are restarted if necessary
+  - mongo shell output is logged to mongo_shell.log, lines are prefixed by a process tag
+  - dataPath is CWD/data/
+  - MONGO_SHUTDOWN=0 environment variable to NOT shutdown the cluster and mongo shell after running tests
+    permitting subsequent tests to be run in less than a second instead of suffering 25-second replica set startup
+    and examination of live cluster and database
+
 ## Work Items
 
 - ReplSetTest refactoring out of Shell
 - JS var name for ReplSetTest, allows multiple instances
-
 - data directory parameter - getPath, this.path opt
-
-    replsettest.js
-        ReplSetTest.prototype.start
-            defaults = { dbpath : "$set-$node" }
-            var pathOpts = { node : n, set : this.name }
-            options.pathOpts = Object.merge( options.pathOpts || {}, pathOpts )
-            options.dbpath = this.getPath(n);
-            var rval = this.nodes[n] = MongoRunner.runMongod( options )
-    servers.js
-        MongoRunner.runMongod = function( opts )
-            opts = MongoRunner.mongodOptions( opts );
-            opts.dbpath = MongoRunner.toRealDir( opts.dbpath || "$dataDir/mongod-$port",
-                                                     opts.pathOpts )
-            path = MongoRunner.toRealPath( path, pathOpts )
-            path = path.replace( /\$dataPath/g, MongoRunner.dataPath )
-            path = path.replace( /\$dataDir/g, MongoRunner.dataDir )
-            path = MongoRunner.dataPath + path
-        MongoRunner.dataPath = "/data/db/"
-
 - move cluster_test.js code to replsettest.js
+- MONGO_SHUTDOWN=0 to suppress shutdown of cluster and mongo shell
+
+- sharded cluster test framework and tests
+    shardingtest.js
 
 - move Mongo::Shell code to cluster_test.js
 - fix 5 ReplicaSetAuthenticationTest failures/errors
-- sharded cluster test framework and tests
-    shardingtest.js
 
 - Perl - following iterative steps in plan
 - test environment setup - local, Jenkins, MCI - environment variable(?) - discuss with Mike O. and others

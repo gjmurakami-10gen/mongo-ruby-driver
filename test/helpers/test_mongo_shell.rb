@@ -146,7 +146,7 @@ module Mongo
         :name => REPL_SET_NAME,
         :nodes => REPL_SET_NODES,
         :startPort => REPL_SET_START_PORT,
-        :path => '/data/db/'
+        :dataPath => '/data/db/'
     }
 
     class Node
@@ -217,9 +217,9 @@ module Mongo
       x_s("typeof #{var};") == "object"
     end
 
-    def stop
+    def stop(cleanup = true)
       sio = StringIO.new
-      sh("#{var}.stopSet();", sio)
+      sh("#{var}.stopSet(undefined, #{!cleanup});", sio)
       raise sio.string unless /ReplSetTest stopSet \*\*\* Shut down repl set - test worked \*\*\*/.match(sio.string)
       sio.string
     end
@@ -326,7 +326,7 @@ class Test::Unit::TestCase
           }
           opts = default_opts.merge(opts)
           FileUtils.mkdir_p(opts[:dataPath])
-          puts @@rs.start(opts)
+          @@rs.start(opts)
         end
         @rs = @@rs
     end
@@ -334,16 +334,19 @@ class Test::Unit::TestCase
 end
 
 Test::Unit.at_exit do
-  TEST_BASE.class_eval do
-    begin
-      rs = class_variable_get(:@@rs)
-      rs.stop
-    rescue
-    end
-    begin
-      ms = class_variable_get(:@@ms)
-      ms.exit
-    rescue
+  mongo_shutdown = ENV['MONGO_SHUTDOWN']
+  if mongo_shutdown.nil? || !mongo_shutdown.match(/^(0|false|)$/i)
+    TEST_BASE.class_eval do
+      begin
+        rs = class_variable_get(:@@rs)
+        rs.stop
+      rescue
+      end
+      begin
+        ms = class_variable_get(:@@ms)
+        ms.exit
+      rescue
+      end
     end
   end
 end
