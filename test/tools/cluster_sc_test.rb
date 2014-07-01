@@ -22,17 +22,16 @@ class ClusterShardingTest < Test::Unit::TestCase
   end
 
   def test_cs_methods
-    puts @sc.x_s("#{@sc.var}.")
+    puts
     if defined? Mongo::Shell
       puts "@sc.s: #{@sc.s.inspect}"
       puts "@sc.s0: #{@sc.s0.inspect}"
       puts "@sc.s1: #{@sc.s1.inspect}"
       puts "@sc.s2: #{@sc.s2.inspect}"
-      puts "config0"
-      pp @sc.config0
+      puts "@sc.config0: #{@sc.config0.inspect}"
     end
+    puts "@sc.servers(:routers): #{@sc.servers(:routers).inspect}"
     puts "@sc.mongos_seeds: #{@sc.mongos_seeds.inspect}"
-    #puts "@sc.servers(:routers): #{@sc.servers(:routers).inspect}"
     #puts "@sc.member_by_name(): #{@sc.member_by_name()}"
   end
 

@@ -312,7 +312,7 @@ module Mongo
     DEFAULT_OPTS = {
         :name => "test",
         :shards => 2,
-        :rs => { :nodes => 1 },
+        :rs => { :nodes => 3 },
         :mongos => 2,
         :other => { :separateConfig => true },
         :dataPath => "#{Dir.getwd}/data/" # must be a full path
@@ -327,19 +327,20 @@ module Mongo
       opts = DEFAULT_OPTS.dup.merge(opts)
       sio = StringIO.new
       sh("var #{var} = new ShardingTest( #{opts.to_json} );", sio)
-      #raise sio.string unless /ReplSetTest Starting/.match(sio.string)
       sio.string
     end
 
     def stop
       sio = StringIO.new
       sh("#{var}.stop();", sio)
-      #raise sio.string unless /ReplSetTest stopSet \*\*\* Shut down repl set - test worked \*\*\*/.match(sio.string)
+      raise sio.string unless /\*\*\* ShardingTest test completed /.match(sio.string)
       sio.string
     end
 
     def restart
-      # pending
+      sio = StringIO.new
+      sh("#{var}.restart();", sio)
+      sio.string
     end
 
     def s
@@ -362,8 +363,14 @@ module Mongo
       Mongo::ClusterTest::Node.new(self, x_s("#{var}.config0;"))
     end
 
+    def servers(type)
+      case type
+        when :routers
+          [s0, s1, s2].select{|node| node.host}
+      end
+    end
     def mongos_seeds
-      [s0, s1, s2].map(&:host_port).select{|host_port| !host_port.empty?}
+      servers(:routers).map(&:host_port)
     end
   end
 end

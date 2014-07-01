@@ -56,6 +56,7 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
 
 - sharded cluster test framework and tests
     shardingtest.js
+- sharding test dbpath
 
 - move Mongo::Shell code to cluster_test.js
 - fix 5 ReplicaSetAuthenticationTest failures/errors
