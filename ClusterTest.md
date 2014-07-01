@@ -24,10 +24,10 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
     Error: test_duplicate_key_with_auth_error(ReplicaSetAuthenticationTest)
     Error: test_duplicate_key_with_auth_error_unordered(ReplicaSetAuthenticationTest)
     
-    # complex_connect # excluded in testing.rake
-    # read_preferences # excluded in testing.rake
-    # refresh_test # commented out - @rs.add_node(n) @rs.remove_secondary_node @rs.repl_set_remove_node(2)
-    # ssl # excluded in testing.rake
+    - complex_connect # excluded in testing.rake
+    - read_preferences # excluded in testing.rake
+    - refresh_test # commented out - @rs.add_node(n) @rs.remove_secondary_node @rs.repl_set_remove_node(2)
+    - ssl # excluded in testing.rake
       
 ## mongo shell test framework essentials
 
@@ -35,14 +35,14 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
 - language interface communicates via socket to the mongo shell
 - requests are JavaScript statements, responses are mixed text and JSON
 - mongo-ruby-driver Mongo::Shell, Mongo::ReplSetTest, Mongo::ReplSetTest::Node classes
-  - methods provided for nodes, primary, secondaries, uri, kill, stop
-  - runs 96 replica set tests in less than 3 minutes
-  - the replica set is not shutdown after each test, instead nodes are restarted if necessary
-  - mongo shell output is logged to mongo_shell.log, lines are prefixed by a process tag
-  - dataPath is CWD/data/
-  - MONGO_SHUTDOWN=0 environment variable to NOT shutdown the cluster and mongo shell after running tests
-    permitting subsequent tests to be run in less than a second instead of suffering 25-second replica set startup
-    and examination of live cluster and database
+    - methods provided for nodes, primary, secondaries, uri, kill, stop
+    - runs 96 replica set tests in less than 3 minutes
+    - the replica set is not shutdown after each test, instead nodes are restarted if necessary
+    - mongo shell output is logged to mongo_shell.log, lines are prefixed by a process tag
+    - dataPath is CWD/data/
+    - MONGO_SHUTDOWN=0 environment variable to NOT shutdown the cluster and mongo shell after running tests
+      permitting subsequent tests to be run in less than a second instead of suffering 25-second replica set startup
+      and examination of live cluster and database
 
 ## Work Items
 
@@ -51,6 +51,8 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
 - data directory parameter - getPath, this.path opt
 - move cluster_test.js code to replsettest.js
 - MONGO_SHUTDOWN=0 to suppress shutdown of cluster and mongo shell
+- DRY default_opts
+- ClusterTest refactoring
 
 - sharded cluster test framework and tests
     shardingtest.js
@@ -65,6 +67,7 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
 ### Pending
 
 - rs.ensure
+
     ReplSetTest.prototype.ensureSet = function( options ) {
         for(var i=0; i < this.ports.length; i++) {
             if (!this.nodes[i].running()) { //
@@ -236,7 +239,7 @@ see tasks/dev.rake for status of passing and failing tests
     ...
     > rs.stopSet();
     ...
-    > var st = new ShardingTestShardingTest({name: "test", shards: 2, rs: {nodes: 1}, mongos: 2, other: { separateConfig: true } })
+    > var st = new ShardingTest({name: "test", shards: 2, rs: {nodes: 1}, mongos: 2, other: { separateConfig: true } })
     ...
     > st.
     st.admin                  st.getOther(              st.s

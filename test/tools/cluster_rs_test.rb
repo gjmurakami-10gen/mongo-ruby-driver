@@ -15,7 +15,7 @@
 require 'test_helper'
 #require 'shell/test_shell'
 
-class ReplicaSetBasicTest < Test::Unit::TestCase
+class ClusterReplicaSetTest < Test::Unit::TestCase
 
   def setup
     ensure_cluster(:rs)
@@ -51,23 +51,23 @@ class ReplicaSetBasicTest < Test::Unit::TestCase
 
   def test_rs_restart
     sio = StringIO.new
-    system("pgrep -fl mongod")
+    system("pgrep -fl mongo")
     #puts @rs.status
     puts "******** @rs.primary.stop ********"
     id = @rs.primary.stop
-    system("pgrep -fl mongod")
+    system("pgrep -fl mongo")
     puts @rs.status
     puts "******** restartSet ********"
     puts @rs.sh("#{@rs.var}.restartSet();")
     puts @rs.sh("#{@rs.var}.awaitSecondaryNodes();")
     puts @rs.sh("#{@rs.var}.awaitReplication();")
-    system("pgrep -fl mongod")
+    system("pgrep -fl mongo")
     puts @rs.status
     @@rs.restart
   end
 
   def test_config
     puts
-    pp @rs.config
+    pp @@rs.config
   end
 end

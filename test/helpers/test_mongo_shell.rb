@@ -137,46 +137,37 @@ module Mongo
     end
   end
 
-  class ReplSetTest
-    REPL_SET_NAME = 'test'
-    REPL_SET_NODES = 3
-    REPL_SET_START_PORT = 31000
-    VAR = 'rs'
-    DEFAULT_OPTS = {
-        :name => REPL_SET_NAME,
-        :nodes => REPL_SET_NODES,
-        :startPort => REPL_SET_START_PORT,
-        :dataPath => '/data/db/'
-    }
+  class ClusterTest
+    VAR = 'ct'
 
     class Node
-      attr_reader :rs, :conn, :var, :host_port, :host, :port
+      attr_reader :cluster, :conn, :var, :host_port, :host, :port
 
-      def initialize(rs, conn)
-        @rs = rs
+      def initialize(cluster, conn)
+        @cluster = cluster
         @conn = conn
-        @var = @rs.var
+        @var = @cluster.var
         @host_port = conn.sub('connection to ', '')
         @host_port = host_port
         @host, @port = host_port.split(':')
         @port = @port.to_i
       end
 
-      def self.a_from_list(rs, list)
-        list.collect{|s| Node.new(rs, s)}
+      def self.a_from_list(cluster, list)
+        list.collect{|s| Mongo::ClusterTest::Node.new(cluster, s)}
       end
 
       def id
-        @rs.x_s("#{var}.getNodeId(#{@conn.inspect});").to_i
+        @cluster.x_s("#{var}.getNodeId(#{@conn.inspect});").to_i
       end
 
       def kill(signal = Signal.list['KILL'])
-        result = @rs.x_s("#{var}.stop(#{id.inspect},#{signal.inspect},true);")
+        result = @cluster.x_s("#{var}.stop(#{id.inspect},#{signal.inspect},true);")
         raise result unless /shell: stopped mongo program/.match(result)
       end
 
       def stop
-        result = @rs.x_s("#{var}.stop(#{id.inspect},true);")
+        result = @cluster.x_s("#{var}.stop(#{id.inspect},true);")
         raise result unless /shell: stopped mongo program/.match(result)
       end
     end
@@ -200,6 +191,25 @@ module Mongo
       @ms.sh(s, out)
     end
 
+    def exists?
+      x_s("typeof #{var};") == "object"
+    end
+  end
+
+  class ReplSetTest <  ClusterTest
+    VAR = 'rs'
+    DEFAULT_OPTS = {
+        :name => 'test',
+        :nodes => 3,
+        :startPort => 31000,
+        :dataPath => "#{Dir.getwd}/data/" # must be a full path
+    }
+
+    def initialize(ms, var = VAR)
+      @ms = ms
+      @var = var
+    end
+
     def start(opts = {})
       opts = DEFAULT_OPTS.dup.merge(opts)
       sio = StringIO.new
@@ -211,10 +221,6 @@ module Mongo
       sh("#{var}.awaitReplication();", sio)
       raise sio.string unless /ReplSetTest awaitReplication: finished: all/.match(sio.string)
       sio.string
-    end
-
-    def exists?
-      x_s("typeof #{var};") == "object"
     end
 
     def stop(cleanup = true)
@@ -238,11 +244,11 @@ module Mongo
     end
 
     def nodes
-      Node.a_from_list(self, x_s("#{var}.nodes;").parse_psuedo_array)
+      Mongo::ClusterTest::Node.a_from_list(self, x_s("#{var}.nodes;").parse_psuedo_array)
     end
 
     def primary
-      Node.new(self, x_s("#{var}.getPrimary();"))
+      Mongo::ClusterTest::Node.new(self, x_s("#{var}.getPrimary();"))
     end
 
     def primary_name
@@ -250,7 +256,7 @@ module Mongo
     end
 
     def secondaries
-      Node.a_from_list(self, x_s("#{var}.getSecondaries();").parse_psuedo_array)
+      Mongo::ClusterTest::Node.a_from_list(self, x_s("#{var}.getSecondaries();").parse_psuedo_array)
     end
 
     def secondary_names
@@ -300,6 +306,66 @@ module Mongo
       secondaries.sample.stop
     end
   end
+
+  class ShardingTest < ClusterTest
+    VAR = 'sc'
+    DEFAULT_OPTS = {
+        :name => "test",
+        :shards => 2,
+        :rs => { :nodes => 1 },
+        :mongos => 2,
+        :other => { :separateConfig => true },
+        :dataPath => "#{Dir.getwd}/data/" # must be a full path
+    }
+
+    def initialize(ms, var = VAR)
+      @ms = ms
+      @var = var
+    end
+
+    def start(opts = {})
+      opts = DEFAULT_OPTS.dup.merge(opts)
+      sio = StringIO.new
+      sh("var #{var} = new ShardingTest( #{opts.to_json} );", sio)
+      #raise sio.string unless /ReplSetTest Starting/.match(sio.string)
+      sio.string
+    end
+
+    def stop
+      sio = StringIO.new
+      sh("#{var}.stop();", sio)
+      #raise sio.string unless /ReplSetTest stopSet \*\*\* Shut down repl set - test worked \*\*\*/.match(sio.string)
+      sio.string
+    end
+
+    def restart
+      # pending
+    end
+
+    def s
+      Mongo::ClusterTest::Node.new(self, x_s("#{var}.s;"))
+    end
+
+    def s0
+      Mongo::ClusterTest::Node.new(self, x_s("#{var}.s0;"))
+    end
+
+    def s1
+      Mongo::ClusterTest::Node.new(self, x_s("#{var}.s1;"))
+    end
+
+    def s2
+      Mongo::ClusterTest::Node.new(self, x_s("#{var}.s2;"))
+    end
+
+    def config0
+      Mongo::ClusterTest::Node.new(self, x_s("#{var}.config0;"))
+    end
+
+    def mongos_seeds
+      [s0, s1, s2].map(&:host_port).select{|host_port| !host_port.empty?}
+    end
+  end
 end
 
 class Test::Unit::TestCase
@@ -318,17 +384,23 @@ class Test::Unit::TestCase
         if @@rs.exists?
           @@rs.restart
         else
-          default_opts = {
-              :name => 'test',
-              :nodes => 3,
-              :startPort => 31000,
-              :dataPath => "#{Dir.getwd}/data/" # must be a full path
-          }
-          opts = default_opts.merge(opts)
+          opts = Mongo::ReplSetTest::DEFAULT_OPTS.dup.merge(opts)
           FileUtils.mkdir_p(opts[:dataPath])
           @@rs.start(opts)
         end
         @rs = @@rs
+      when :sc
+        unless defined? @@sc
+          @@sc = Mongo::ShardingTest.new(@@ms, 'sc')
+        end
+        if @@sc.exists?
+          @@sc.restart
+        else
+          opts = Mongo::ShardingTest::DEFAULT_OPTS.dup.merge(opts)
+          FileUtils.mkdir_p(opts[:dataPath])
+          @@sc.start(opts)
+        end
+        @sc = @@sc
     end
   end
 end
@@ -340,6 +412,11 @@ Test::Unit.at_exit do
       begin
         rs = class_variable_get(:@@rs)
         rs.stop
+      rescue
+      end
+      begin
+        sc = class_variable_get(:@@sc)
+        sc.stop
       rescue
       end
       begin
