@@ -156,20 +156,6 @@ module Mongo
       def self.a_from_list(cluster, list)
         list.collect{|s| Mongo::ClusterTest::Node.new(cluster, s)}
       end
-
-      def id
-        @cluster.x_s("#{var}.getNodeId(#{@conn.inspect});").to_i
-      end
-
-      def kill(signal = Signal.list['KILL'])
-        result = @cluster.x_s("#{var}.stop(#{id.inspect},#{signal.inspect},true);")
-        raise result unless /shell: stopped mongo program/.match(result)
-      end
-
-      def stop
-        result = @cluster.x_s("#{var}.stop(#{id.inspect},true);")
-        raise result unless /shell: stopped mongo program/.match(result)
-      end
     end
 
     attr_reader :var
@@ -204,6 +190,26 @@ module Mongo
         :startPort => 31000,
         :dataPath => "#{Dir.getwd}/data/" # must be a full path
     }
+
+    class ReplSetNode < Mongo::ClusterTest::Node
+      def initialize(cluster, conn)
+        super
+      end
+
+      def id
+        @cluster.x_s("#{var}.getNodeId(#{@conn.inspect});").to_i
+      end
+
+      def kill(signal = Signal.list['KILL'])
+        result = @cluster.x_s("#{var}.stop(#{id.inspect},#{signal.inspect},true);")
+        raise result unless /shell: stopped mongo program/.match(result)
+      end
+
+      def stop
+        result = @cluster.x_s("#{var}.stop(#{id.inspect},true);")
+        raise result unless /shell: stopped mongo program/.match(result)
+      end
+    end
 
     def initialize(ms, var = VAR)
       @ms = ms
@@ -244,11 +250,11 @@ module Mongo
     end
 
     def nodes
-      Mongo::ClusterTest::Node.a_from_list(self, x_s("#{var}.nodes;").parse_psuedo_array)
+      ReplSetNode.a_from_list(self, x_s("#{var}.nodes;").parse_psuedo_array)
     end
 
     def primary
-      Mongo::ClusterTest::Node.new(self, x_s("#{var}.getPrimary();"))
+      ReplSetNode.new(self, x_s("#{var}.getPrimary();"))
     end
 
     def primary_name
@@ -256,7 +262,7 @@ module Mongo
     end
 
     def secondaries
-      Mongo::ClusterTest::Node.a_from_list(self, x_s("#{var}.getSecondaries();").parse_psuedo_array)
+      ReplSetNode.a_from_list(self, x_s("#{var}.getSecondaries();").parse_psuedo_array)
     end
 
     def secondary_names
@@ -318,6 +324,27 @@ module Mongo
         :dataPath => "#{Dir.getwd}/data/" # must be a full path
     }
 
+    class ShardingNode < Mongo::ClusterTest::Node
+      attr_reader :id
+
+      def initialize(cluster, conn, id)
+        super(cluster, conn)
+        @id = id
+      end
+
+      def start
+        result = @cluster.x_s("#{var}.restartMongos(#{id.inspect});")
+        raise result unless /shell: started program mongos/.match(result)
+        result
+      end
+
+      def stop
+        result = @cluster.x_s("#{var}.stopMongos(#{id.inspect});")
+        raise result unless /shell: stopped mongo program/.match(result)
+        result
+      end
+    end
+
     def initialize(ms, var = VAR)
       @ms = ms
       @var = var
@@ -339,28 +366,24 @@ module Mongo
 
     def restart
       sio = StringIO.new
-      sh("#{var}.restart();", sio)
+      sh("#{var}.restartMongos();", sio)
       sio.string
     end
 
     def s
-      Mongo::ClusterTest::Node.new(self, x_s("#{var}.s;"))
+      ShardingNode.new(self, x_s("#{var}.s;"), 0)
     end
 
     def s0
-      Mongo::ClusterTest::Node.new(self, x_s("#{var}.s0;"))
+      ShardingNode.new(self, x_s("#{var}.s0;"), 0)
     end
 
     def s1
-      Mongo::ClusterTest::Node.new(self, x_s("#{var}.s1;"))
+      ShardingNode.new(self, x_s("#{var}.s1;"), 1)
     end
 
     def s2
-      Mongo::ClusterTest::Node.new(self, x_s("#{var}.s2;"))
-    end
-
-    def config0
-      Mongo::ClusterTest::Node.new(self, x_s("#{var}.config0;"))
+      ShardingNode.new(self, x_s("#{var}.s2;"), 2)
     end
 
     def servers(type)
@@ -369,8 +392,13 @@ module Mongo
           [s0, s1, s2].select{|node| node.host}
       end
     end
+
     def mongos_seeds
       servers(:routers).map(&:host_port)
+    end
+
+    def member_by_name(name)
+      servers(:routers).find{|obj| obj.host_port == name}
     end
   end
 end

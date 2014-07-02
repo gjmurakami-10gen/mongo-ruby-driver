@@ -28,16 +28,26 @@ class ClusterShardingTest < Test::Unit::TestCase
       puts "@sc.s0: #{@sc.s0.inspect}"
       puts "@sc.s1: #{@sc.s1.inspect}"
       puts "@sc.s2: #{@sc.s2.inspect}"
-      puts "@sc.config0: #{@sc.config0.inspect}"
     end
     puts "@sc.servers(:routers): #{@sc.servers(:routers).inspect}"
     puts "@sc.mongos_seeds: #{@sc.mongos_seeds.inspect}"
-    #puts "@sc.member_by_name(): #{@sc.member_by_name()}"
+    #name = "localhost:30999"
+    #puts "@sc.member_by_name(#{name.inspect}): #{@sc.member_by_name(name).inspect}"
   end
 
   def test_cs_restart
     sio = StringIO.new
+    puts "remaining processes"
     system("pgrep -fl mongo")
-    @sc.restart
+    router = @sc.servers(:routers).first
+    puts "stopping a router"
+    puts router.stop
+    puts "remaining processes"
+    system("pgrep -fl mongo")
+    puts "restarting a router"
+    puts @sc.restart
+    #puts router.start
+    puts "restarted processes"
+    system("pgrep -fl mongo")
   end
 end
