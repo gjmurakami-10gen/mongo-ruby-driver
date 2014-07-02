@@ -70,4 +70,21 @@ class ClusterReplicaSetTest < Test::Unit::TestCase
     puts
     pp @@rs.config
   end
+
+  def test_mongo_shell
+    ENV['MONGO_SHELL'] = 'xyzzy'
+    assert_raise Errno::ENOENT do
+      Mongo::Shell.new(:port => 40001)
+    end
+    ENV['MONGO_SHELL'] = '../mongo/mongo'
+    assert_nothing_raised do
+      ms = Mongo::Shell.new(:port => 40001)
+      ms.exit
+    end
+    ENV.delete('MONGO_SHELL')
+    assert_nothing_raised do
+      ms = Mongo::Shell.new(:port => 40001)
+      ms.exit
+    end
+  end
 end

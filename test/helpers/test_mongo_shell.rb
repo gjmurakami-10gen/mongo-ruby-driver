@@ -35,8 +35,8 @@ module Mongo
   # Methods are for 1.x-stable compatibility but should be minimized for 2.x
   # Full documentation is pending.
   class Shell
-    MONGO = '../mongo/mongo'
-    CMD = %W{#{MONGO} --nodb --shell --listen}
+    MONGO_SHELL = '../mongo/mongo'
+    MONGO_SHELL_ARGS = %W{--nodb --shell --listen}
     MONGO_PORT = 30001
     MONGO_TEST_FRAMEWORK_JS = 'test/tools/cluster_test.js'
     MONGO_LOG = ['mongo_shell.log', 'w']
@@ -60,7 +60,8 @@ module Mongo
     # @return [true, false] true if mongo shell process was spawned
     def spawn
       unless @pid
-        cmd = CMD << @opts[:port].to_s << MONGO_TEST_FRAMEWORK_JS
+        mongo_shell = ENV['MONGO_SHELL'] || MONGO_SHELL
+        cmd = [mongo_shell] + MONGO_SHELL_ARGS << @opts[:port].to_s << MONGO_TEST_FRAMEWORK_JS
         opts = {}
         opts[:out] = @opts[:mongo_out] if @opts[:mongo_out]
         opts[:err] = @opts[:mongo_err] if @opts[:mongo_err]
@@ -152,10 +153,6 @@ module Mongo
         @host, @port = host_port.split(':')
         @port = @port.to_i
       end
-
-      def self.a_from_list(cluster, list)
-        list.collect{|s| Mongo::ClusterTest::Node.new(cluster, s)}
-      end
     end
 
     attr_reader :var
@@ -194,6 +191,10 @@ module Mongo
     class ReplSetNode < Mongo::ClusterTest::Node
       def initialize(cluster, conn)
         super
+      end
+
+      def self.a_from_list(cluster, list)
+        list.collect{|s| ReplSetNode.new(cluster, s)}
       end
 
       def id

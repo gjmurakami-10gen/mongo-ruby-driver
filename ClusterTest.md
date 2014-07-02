@@ -67,9 +67,8 @@ Ruby replica set and sharding tests run in less than 4 minutes - authentication 
 - DRY default_opts
 - ClusterTest refactoring
 - sharded cluster test framework and tests
-- MongoRunner.dbpath set for sharding test  
-
-- MONGO_SHELL environment variable
+- MongoRunner.dbpath set for sharding test
+- MONGO_SHELL environment variable for path to mongo shell
 
 - Perl - following iterative steps in plan
 
