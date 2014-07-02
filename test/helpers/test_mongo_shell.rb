@@ -219,6 +219,7 @@ module Mongo
     def start(opts = {})
       opts = DEFAULT_OPTS.dup.merge(opts)
       sio = StringIO.new
+      sh("MongoRunner.dataPath = #{opts[:dataPath].inspect};", sio) if opts[:dataPath]
       sh("var #{var} = new ReplSetTest( #{opts.to_json} );", sio)
       sh("#{var}.startSet();", sio)
       raise sio.string unless /ReplSetTest Starting/.match(sio.string)
@@ -353,6 +354,7 @@ module Mongo
     def start(opts = {})
       opts = DEFAULT_OPTS.dup.merge(opts)
       sio = StringIO.new
+      sh("MongoRunner.dataPath = #{opts[:dataPath].inspect};", sio) if opts[:dataPath]
       sh("var #{var} = new ShardingTest( #{opts.to_json} );", sio)
       sio.string
     end

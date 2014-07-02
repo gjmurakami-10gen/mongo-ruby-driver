@@ -1,8 +1,36 @@
 # Mongo Shell Cluster Testing Notes
 
+## mongo shell test framework essentials
+
+- based on mongo shell ReplSetTest and ShardingTest objects
+- language interface communicates via socket to the mongo shell
+- requests are JavaScript statements, responses are mixed text and JSON
+- mongo-ruby-driver
+    - runs 96 replica set tests in less than 3 minutes
+    - runs 14 sharding tests in 1 minute
+    - the replica set / sharded cluster is not shutdown after each test, instead nodes are restarted if necessary
+    - mongo shell output is logged to mongo_shell.log, lines are prefixed by a process tag
+    - dataPath is CWD/data/
+    - classes Mongo::Shell, Mongo::ClusterTest::Node, Mongo::ReplSetTest, Mongo::ShardingTest
+    - methods provided for nodes, primary, secondaries, uri, kill, stop
+    - MONGO_SHUTDOWN=0 environment variable to NOT shutdown the cluster and mongo shell after running tests
+      permitting subsequent tests to be run in less than a second instead of suffering 25-second replica set startup
+      and examination of live cluster and database
+
 ## Status
 
-Ruby replica set tests run in less than 3 minutes - authentication issues - 1 failure and 4 errors
+Ruby replica set and sharding tests run in less than 4 minutes - authentication issues - 1 failure and 4 errors
+
+- fast sharding test restart working without full teardown overhead!
+
+    $ TEST_OPTS=-v time bundle exec rake test:sharded_cluster
+    ...
+    Finished in 53.147674 seconds.
+   
+    14 tests, 40 assertions, 0 failures, 0 errors, 0 pendings, 0 omissions, 0 notifications
+    100% passed
+    ...
+           64.02 real         2.88 user         3.29 sys
 
 - fast replica set test restart working without full teardown overhead!
 
@@ -28,21 +56,6 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
     - read_preferences # excluded in testing.rake
     - refresh_test # commented out - @rs.add_node(n) @rs.remove_secondary_node @rs.repl_set_remove_node(2)
     - ssl # excluded in testing.rake
-      
-## mongo shell test framework essentials
-
-- based on mongo shell ReplSetTest and ShardingTest objects
-- language interface communicates via socket to the mongo shell
-- requests are JavaScript statements, responses are mixed text and JSON
-- mongo-ruby-driver Mongo::Shell, Mongo::ReplSetTest, Mongo::ReplSetTest::Node classes
-    - methods provided for nodes, primary, secondaries, uri, kill, stop
-    - runs 96 replica set tests in less than 3 minutes
-    - the replica set is not shutdown after each test, instead nodes are restarted if necessary
-    - mongo shell output is logged to mongo_shell.log, lines are prefixed by a process tag
-    - dataPath is CWD/data/
-    - MONGO_SHUTDOWN=0 environment variable to NOT shutdown the cluster and mongo shell after running tests
-      permitting subsequent tests to be run in less than a second instead of suffering 25-second replica set startup
-      and examination of live cluster and database
 
 ## Work Items
 
@@ -53,15 +66,14 @@ Ruby replica set tests run in less than 3 minutes - authentication issues - 1 fa
 - MONGO_SHUTDOWN=0 to suppress shutdown of cluster and mongo shell
 - DRY default_opts
 - ClusterTest refactoring
-
 - sharded cluster test framework and tests
-    shardingtest.js
-- sharding test dbpath
+- MongoRunner.dbpath set for sharding test  
 
-- move Mongo::Shell code to cluster_test.js
-- fix 5 ReplicaSetAuthenticationTest failures/errors
+- MONGO_SHELL environment variable
 
 - Perl - following iterative steps in plan
+
+- fix 5 ReplicaSetAuthenticationTest failures/errors
 - test environment setup - local, Jenkins, MCI - environment variable(?) - discuss with Mike O. and others
 - stopSet clears contents but does not remove directories
 
