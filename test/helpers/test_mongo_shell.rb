@@ -3,10 +3,6 @@ require 'pp'
 require 'json'
 
 class String
-  def pretrim_lines
-    gsub(/^\s+/, '')
-  end
-
   def parse_psuedo_array
     self[/^\[(.*)\]$/m,1].split(',').collect{|s| s.strip}
   end
@@ -28,32 +24,33 @@ class String
   end
 end
 
-# Mongo::Shell should be extracted into a separate file but is left here for the purposes of demonstration for now
 module Mongo
   # A Mongo shell for cluster testing with methods for socket communication and testing convenience.
   # IO is synchronous with delimiters such as the prompt "> ".
   # Methods are for 1.x-stable compatibility but should be minimized for 2.x
   # Full documentation is pending.
   class Shell
-    MONGO_SHELL = '../mongo/mongo'
-    MONGO_SHELL_ARGS = %W{--nodb --shell --listen}
-    MONGO_PORT = 30001
-    MONGO_TEST_FRAMEWORK_JS = 'test/tools/cluster_test.js'
-    MONGO_LOG = ['mongo_shell.log', 'w']
-    DEFAULT_OPTS = {:port => MONGO_PORT, :out => STDOUT, :mongo_out => MONGO_LOG, :mongo_err => MONGO_LOG}
-    RETRIES = 10
-    PROMPT = %r{> $}m
-    BYE = %r{^bye\n$}m
+    MONGO_SHELL = '../mongo/mongo'.freeze
+    MONGO_SHELL_ARGS = %W{--nodb --shell --listen}.freeze
+    MONGO_PORT = 30001.freeze
+    MONGO_TEST_FRAMEWORK_JS = 'test/tools/cluster_test.js'.freeze
+    MONGO_LOG = ['mongo_shell.log', 'w'].freeze
+    DEFAULT_OPTS = {:port => MONGO_PORT, :out => STDOUT, :mongo_out => MONGO_LOG, :mongo_err => MONGO_LOG}.freeze
+    RETRIES = 10.freeze
+    PROMPT = %r{> $}m.freeze
+    BYE = %r{^bye\n$}m.freeze
 
     attr_reader :out, :socket
 
     def initialize(opts = {})
-      @opts = DEFAULT_OPTS.merge(opts)
+      @opts = DEFAULT_OPTS.dup.merge(opts)
       @out = @opts[:out]
       @pid = nil
       connect
       read # blocking read for prompt
     end
+
+    private
 
     # spawn a mongo shell
     #
@@ -106,14 +103,11 @@ module Mongo
 
     def puts(s)
       s += "\n" if s[-1, 1] != "\n"
-      @socket.print(s) # single write, not # @socket.puts(s) #
+      @socket.print(s) # single socket write, do not use @socket.puts(s)
       self
     end
 
-    # exit the mongo shell
-    #
-    # @return [Mongo::Shell] self
-    def exit
+    def stop
       puts("exit").read(BYE)
       @socket.shutdown # graceful shutdown
       @socket.close
@@ -139,7 +133,9 @@ module Mongo
   end
 
   class ClusterTest
-    VAR = 'ct'
+    DEFAULT_OPTS = {
+        :var => 'ct'
+    }.freeze
 
     class Node
       attr_reader :cluster, :conn, :var, :host_port, :host, :port
@@ -157,9 +153,10 @@ module Mongo
 
     attr_reader :var
 
-    def initialize(ms, var = VAR)
+    def initialize(ms, opts = DEFAULT_OPTS)
       @ms = ms
-      @var = var
+      @opts = DEFAULT_OPTS.dup.merge(opts)
+      @var = @opts[:var]
     end
 
     def x_s(s, prompt = Mongo::Shell::PROMPT)
@@ -177,16 +174,26 @@ module Mongo
     def exists?
       x_s("typeof #{var};") == "object"
     end
+
+    def ensure_cluster
+      if exists?
+        restart
+      else
+        FileUtils.mkdir_p(@opts[:dataPath])
+        start
+      end
+      self
+    end
   end
 
   class ReplSetTest <  ClusterTest
-    VAR = 'rs'
     DEFAULT_OPTS = {
+        :var => 'rs',
         :name => 'test',
         :nodes => 3,
         :startPort => 31000,
         :dataPath => "#{Dir.getwd}/data/" # must be a full path
-    }
+    }.freeze
 
     class ReplSetNode < Mongo::ClusterTest::Node
       def initialize(cluster, conn)
@@ -212,16 +219,16 @@ module Mongo
       end
     end
 
-    def initialize(ms, var = VAR)
+    def initialize(ms, opts = DEFAULT_OPTS)
       @ms = ms
-      @var = var
+      @opts = DEFAULT_OPTS.dup.merge(opts)
+      @var = @opts[:var]
     end
 
-    def start(opts = {})
-      opts = DEFAULT_OPTS.dup.merge(opts)
+    def start
       sio = StringIO.new
-      sh("MongoRunner.dataPath = #{opts[:dataPath].inspect};", sio) if opts[:dataPath]
-      sh("var #{var} = new ReplSetTest( #{opts.to_json} );", sio)
+      sh("MongoRunner.dataPath = #{@opts[:dataPath].inspect};", sio) if @opts[:dataPath]
+      sh("var #{var} = new ReplSetTest( #{@opts.to_json} );", sio)
       sh("#{var}.startSet();", sio)
       raise sio.string unless /ReplSetTest Starting/.match(sio.string)
       sh("#{var}.initiate();", sio)
@@ -316,18 +323,22 @@ module Mongo
   end
 
   class ShardingTest < ClusterTest
-    VAR = 'sc'
     DEFAULT_OPTS = {
+        :var => 'sc',
         :name => "test",
         :shards => 2,
         :rs => { :nodes => 3 },
         :mongos => 2,
         :other => { :separateConfig => true },
         :dataPath => "#{Dir.getwd}/data/" # must be a full path
-    }
+    }.freeze
 
     class ShardingNode < Mongo::ClusterTest::Node
       attr_reader :id
+
+      def self.a_from_list(cluster, list)
+        list.collect.with_index{|s, i| ShardingNode.new(cluster, s, i)}
+      end
 
       def initialize(cluster, conn, id)
         super(cluster, conn)
@@ -347,16 +358,16 @@ module Mongo
       end
     end
 
-    def initialize(ms, var = VAR)
+    def initialize(ms, opts = DEFAULT_OPTS)
       @ms = ms
-      @var = var
+      @opts = DEFAULT_OPTS.dup.merge(opts)
+      @var = @opts[:var]
     end
 
-    def start(opts = {})
-      opts = DEFAULT_OPTS.dup.merge(opts)
+    def start
       sio = StringIO.new
-      sh("MongoRunner.dataPath = #{opts[:dataPath].inspect};", sio) if opts[:dataPath]
-      sh("var #{var} = new ShardingTest( #{opts.to_json} );", sio)
+      sh("MongoRunner.dataPath = #{@opts[:dataPath].inspect};", sio) if @opts[:dataPath]
+      sh("var #{var} = new ShardingTest( #{@opts.to_json} );", sio)
       sio.string
     end
 
@@ -373,35 +384,23 @@ module Mongo
       sio.string
     end
 
-    def s
-      ShardingNode.new(self, x_s("#{var}.s;"), 0)
-    end
-
-    def s0
-      ShardingNode.new(self, x_s("#{var}.s0;"), 0)
-    end
-
-    def s1
-      ShardingNode.new(self, x_s("#{var}.s1;"), 1)
-    end
-
-    def s2
-      ShardingNode.new(self, x_s("#{var}.s2;"), 2)
+    def mongos
+      ShardingNode.a_from_list(self, x_s("#{var}._mongos;").parse_psuedo_array)
     end
 
     def servers(type)
       case type
         when :routers
-          [s0, s1, s2].select{|node| node.host}
+          mongos
       end
     end
 
     def mongos_seeds
-      servers(:routers).map(&:host_port)
+      mongos.map(&:host_port)
     end
 
     def member_by_name(name)
-      servers(:routers).find{|obj| obj.host_port == name}
+      mongos.find{|obj| obj.host_port == name}
     end
   end
 end
@@ -410,35 +409,15 @@ class Test::Unit::TestCase
   include Mongo
   include BSON
 
-  def ensure_cluster(kind=nil, opts={})
-    unless defined? @@ms
-      @@ms = Mongo::Shell.new
-    end
+  def ensure_cluster(kind = nil, opts = {})
+    @@ms ||= Mongo::Shell.new
     case kind
       when :rs
-        unless defined? @@rs
-          @@rs = Mongo::ReplSetTest.new(@@ms, 'rs')
-        end
-        if @@rs.exists?
-          @@rs.restart
-        else
-          opts = Mongo::ReplSetTest::DEFAULT_OPTS.dup.merge(opts)
-          FileUtils.mkdir_p(opts[:dataPath])
-          @@rs.start(opts)
-        end
-        @rs = @@rs
+        @@rs ||= Mongo::ReplSetTest.new(@@ms, opts)
+        @rs = @@rs.ensure_cluster
       when :sc
-        unless defined? @@sc
-          @@sc = Mongo::ShardingTest.new(@@ms, 'sc')
-        end
-        if @@sc.exists?
-          @@sc.restart
-        else
-          opts = Mongo::ShardingTest::DEFAULT_OPTS.dup.merge(opts)
-          FileUtils.mkdir_p(opts[:dataPath])
-          @@sc.start(opts)
-        end
-        @sc = @@sc
+        @@sc ||= Mongo::ShardingTest.new(@@ms, opts)
+        @sc = @@sc.ensure_cluster
     end
   end
 end
@@ -447,20 +426,8 @@ Test::Unit.at_exit do
   mongo_shutdown = ENV['MONGO_SHUTDOWN']
   if mongo_shutdown.nil? || !mongo_shutdown.match(/^(0|false|)$/i)
     TEST_BASE.class_eval do
-      begin
-        rs = class_variable_get(:@@rs)
-        rs.stop
-      rescue
-      end
-      begin
-        sc = class_variable_get(:@@sc)
-        sc.stop
-      rescue
-      end
-      begin
-        ms = class_variable_get(:@@ms)
-        ms.exit
-      rescue
+      [:@@rs, :@@sc, :@@ms].each do |sym|
+        class_variable_get(sym).stop if class_variable_defined?(sym)
       end
     end
   end

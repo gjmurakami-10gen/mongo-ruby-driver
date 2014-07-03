@@ -24,10 +24,7 @@ class ClusterShardingTest < Test::Unit::TestCase
   def test_cs_methods
     puts
     if defined? Mongo::Shell
-      puts "@sc.s: #{@sc.s.inspect}"
-      puts "@sc.s0: #{@sc.s0.inspect}"
-      puts "@sc.s1: #{@sc.s1.inspect}"
-      puts "@sc.s2: #{@sc.s2.inspect}"
+      puts "@sc.mongos: #{@sc.mongos.inspect}"
     end
     puts "@sc.servers(:routers): #{@sc.servers(:routers).inspect}"
     puts "@sc.mongos_seeds: #{@sc.mongos_seeds.inspect}"
