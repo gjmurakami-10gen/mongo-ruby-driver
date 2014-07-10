@@ -24,10 +24,16 @@ class ClusterShardingTest < Test::Unit::TestCase
   def test_cs_methods
     puts
     if defined? Mongo::Shell
-      puts "@sc.mongos: #{@sc.mongos.inspect}"
+      mongos = @sc.mongos
+      puts "mongos: #{mongos.inspect}"
+      assert_equal(2, mongos.size)
+      assert(mongos.first.host_port.bytes.last != 34)
+      assert_equal(30999, mongos.first.port)
     end
     puts "@sc.servers(:routers): #{@sc.servers(:routers).inspect}"
+    assert_equal(2, @sc.servers(:routers).size)
     puts "@sc.mongos_seeds: #{@sc.mongos_seeds.inspect}"
+    assert_equal(2, @sc.mongos_seeds.size)
     #name = "localhost:30999"
     #puts "@sc.member_by_name(#{name.inspect}): #{@sc.member_by_name(name).inspect}"
   end

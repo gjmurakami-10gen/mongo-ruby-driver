@@ -7,6 +7,10 @@ class String
     self[/^\[(.*)\]$/m,1].split(',').collect{|s| s.strip}
   end
 
+  def strip_quotes
+    gsub(/\A['"]+|['"]+\Z/, '')
+  end
+
   def sub_to_json_start
     sub(/^[^{]*{/m, '{')
   end
@@ -102,7 +106,7 @@ module Mongo
     end
 
     def puts(s)
-      s += "\n" if s[-1, 1] != "\n"
+      s += "\n" unless s[-1, 1] == "\n"
       @socket.print(s) # single socket write, do not use @socket.puts(s)
       self
     end
@@ -120,7 +124,7 @@ module Mongo
     end
 
     def x_s(s, prompt = PROMPT)
-      puts(s).read(prompt).sub(prompt,'').chomp
+      x(s).sub(prompt,'').chomp
     end
 
     def x_json(s, prompt = PROMPT)
@@ -255,15 +259,15 @@ module Mongo
     end
 
     def status
-      x_s("#{var}.status();")
+      x_json("#{var}.status();")
     end
 
     def nodes
-      ReplSetNode.a_from_list(self, x_s("#{var}.nodes;").parse_psuedo_array)
+      ReplSetNode.a_from_list(self, x_json("#{var}.nodes;"))
     end
 
     def primary
-      ReplSetNode.new(self, x_s("#{var}.getPrimary();"))
+      ReplSetNode.new(self, x_s("#{var}.getPrimary();").strip_quotes)
     end
 
     def primary_name
@@ -271,7 +275,7 @@ module Mongo
     end
 
     def secondaries
-      ReplSetNode.a_from_list(self, x_s("#{var}.getSecondaries();").parse_psuedo_array)
+      ReplSetNode.a_from_list(self, x_json("#{var}.getSecondaries();"))
     end
 
     def secondary_names
@@ -385,7 +389,7 @@ module Mongo
     end
 
     def mongos
-      ShardingNode.a_from_list(self, x_s("#{var}._mongos;").parse_psuedo_array)
+      ShardingNode.a_from_list(self, x_json("#{var}._mongos;"))
     end
 
     def servers(type)
