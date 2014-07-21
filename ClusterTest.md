@@ -1,5 +1,9 @@
 # Mongo Shell Cluster Testing Notes
 
+- pending
+    - harness as in the Perl driver
+    - version opt and MONGOPATH environment variable as in the Perl driver
+
 ## mongo shell test framework essentials
 
 - based on mongo shell ReplSetTest and ShardingTest objects
@@ -10,6 +14,7 @@
     - runs 14 sharding tests in 1 minute
     - the replica set / sharded cluster is not shutdown after each test, instead nodes are restarted if necessary
     - mongo shell output is logged to mongo_shell.log, lines are prefixed by a process tag
+    - mongo shell is MONGO_SHELL environment variable or ../mongo/mongo
     - dataPath is CWD/data/
     - Mongo::Shell, Mongo::ReplSetTest, Mongo::ShardingTest proxy mongo shell and JS objects
     - Mongo::ClusterTest::Node methods provided, primary, secondaries, uri, kill, stop
