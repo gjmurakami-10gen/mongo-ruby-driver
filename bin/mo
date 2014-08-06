@@ -1,0 +1,152 @@
+#!/usr/bin/env ruby
+# Copyright (C) 2009-2014 MongoDB, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+$LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'spec'), File.join(File.dirname(__FILE__), '..', 'lib'))
+
+require 'support/mongo_orchestration'
+
+id, action = ARGV
+actions = %w(start stop status)
+if !id || !action || !actions.include?(action)
+  puts "usage: #{$0} configuration_id action\naction: #{actions.join('|')}"
+  exit(1)
+end
+
+$VERBOSE = false
+$WORKSPACE = File.expand_path(File.join(File.dirname(__FILE__), '..', 'data', 'db'))
+$LOGPATH = $WORKSPACE
+$DBPATH = $WORKSPACE
+
+configurations = [
+    {
+        orchestration: "hosts",
+        post_data: {
+            id: "single",
+            name: "mongod",
+            procParams: {
+                dbpath: "#{$DBPATH}",
+                ipv6: true,
+                logappend: true,
+                logpath: "#{$LOGPATH}/mongod.log",
+                journal: true
+            }
+        }
+    },
+    {
+        orchestration: "rs",
+        post_data: {
+            id: "repl0",
+            members: [
+                {
+                    procParams: {
+                        dbpath: "#{$DBPATH}/repl0/rs1",
+                        ipv6: true,
+                        logpath: "#{$LOGPATH}/repl0/rs1.log",
+                        nohttpinterface: true,
+                        journal: true,
+                        noprealloc: true,
+                        nssize: 1,
+                        oplogSize: 150,
+                        smallfiles: true
+                    },
+                    rsParams: {
+                        priority: 99
+                    }
+                },
+                {
+                    procParams: {
+                        dbpath: "#{$DBPATH}/repl0/rs2",
+                        ipv6: true,
+                        logpath: "#{$LOGPATH}/repl0/rs2.log",
+                        nohttpinterface: true,
+                        journal: true,
+                        noprealloc: true,
+                        nssize: 1,
+                        oplogSize: 150,
+                        smallfiles: true
+                    },
+                    rsParams: {
+                        priority: 1.1
+                    }
+                },
+                {
+                    procParams: {
+                        dbpath: "#{$DBPATH}/repl0/rs3",
+                        ipv6: true,
+                        logpath: "#{$LOGPATH}/repl0/rs3.log",
+                        nohttpinterface: true,
+                        journal: true,
+                        noprealloc: true,
+                        nssize: 1,
+                        oplogSize: 150,
+                        smallfiles: true
+                    }
+                }
+            ]
+        }
+    },
+    {
+        orchestration: "sh",
+        post_data: {
+            id: "shard_cluster_1",
+            configsvrs: [
+                {
+                    dbpath: "#{$DBPATH}/shard_cluster_1/configsvr",
+                    logpath: "#{$LOGPATH}/shard_cluster_1/configsvr.log"
+                }
+            ],
+            members: [
+                {
+                    id: "sh1",
+                    shardParams: {
+                        procParams: {
+                            dbpath: "#{$DBPATH}/shard_cluster_1/sh1",
+                            logpath: "#{$LOGPATH}/shard_cluster_1/sh1.log"
+                        }
+                    }
+                },
+                {
+                    id: "sh2",
+                    shardParams: {
+                        procParams: {
+                            dbpath: "#{$DBPATH}/shard_cluster_1/sh2",
+                            logpath: "#{$LOGPATH}/shard_cluster_1/sh2.log"
+                        }
+                    }
+                }
+            ],
+            routers: [
+                {
+                    logpath: "#{$LOGPATH}/shard_cluster_1/router0.log"
+                },
+                {
+                    logpath: "#{$LOGPATH}/shard_cluster_1/router1.log"
+                }
+            ]
+        }
+    }
+]
+
+config = configurations.find{|config| config[:post_data][:id] == id}
+raise "id:#{id.inspect} not found" unless config
+p config if $VERBOSE
+
+orch = Mongo::Orchestration::Service.new
+cluster = orch.configure(config)
+cluster.send(action.to_sym)
+action_result = cluster.response.code == 404 ? 'Error' : 'OK'
+puts "#{action} #{action_result} - #{cluster.result_message}"
+
+exit

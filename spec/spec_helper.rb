@@ -23,6 +23,7 @@ require 'support/helpers'
 require 'support/matchers'
 require 'support/monitoring'
 require 'support/cluster_simulator'
+require 'support/mongo_orchestration'
 
 Mongo::Logger.logger = Logger.new($stdout, Logger::DEBUG)
 # Mongo::Logger.logger = Logger.new(StringIO.new, Logger::DEBUG)

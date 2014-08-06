@@ -465,4 +465,59 @@ describe Mongo::Client do
       end
     end
   end
+
+  RSpec.configure do |c|
+    begin
+      mo = Mongo::Orchestration::Service.new
+    rescue => ex
+      puts "***** mongo-orchestration is not available, skipping mongo-orchestration related tests *****"
+      c.filter_run_excluding :orchestration => true
+    end
+  end
+
+  describe 'orchestration', :orchestration => true do
+
+    let(:orch) { Mongo::Orchestration::Service.new }
+    let(:workspace) { File.expand_path(File.join(File.dirname(__FILE__), '..', '..', 'data', 'db')) }
+    let(:dbpath) { workspace }
+    let(:logpath) { workspace }
+    let(:configuration) {
+      {
+          orchestration: "hosts",
+          post_data: {
+              id: "single",
+              name: "mongod",
+              procParams: {
+                  dbpath: dbpath,
+                  ipv6: true,
+                  logappend: true,
+                  logpath: "#{logpath}/mongod.log",
+                  journal: true
+              }
+          }
+      }
+    }
+    let(:cluster) { orch.configure(configuration) }
+
+    before do
+      cluster.start
+    end
+
+    after do
+      cluster.stop
+    end
+
+    it 'connects to single' do
+      expect(JSON.parse(orch.response.body)['service']).to eq('mongo-orchestration')
+      status = JSON.parse(cluster.response.body)
+      uri = status['uri']
+      expect(uri).to match(/:(\d+)/)
+      client = described_class.new([uri], :database => TEST_DB)
+      client.use(:dbtest)
+      p client.database
+      #ismaster = client.database.command(:ismaster => 1)
+      #p ismaster
+      #expect(ismaster['ok']).to eq(1)
+    end
+  end
 end
