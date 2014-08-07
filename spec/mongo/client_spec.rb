@@ -507,17 +507,15 @@ describe Mongo::Client do
       cluster.stop
     end
 
-    it 'connects to single' do
+    it 'connects to configuration single and responds to ismaster' do
       expect(JSON.parse(orch.response.body)['service']).to eq('mongo-orchestration')
       status = JSON.parse(cluster.response.body)
       uri = status['uri']
       expect(uri).to match(/:(\d+)/)
       client = described_class.new([uri], :database => TEST_DB)
-      client.use(:dbtest)
-      p client.database
-      #ismaster = client.database.command(:ismaster => 1)
-      #p ismaster
-      #expect(ismaster['ok']).to eq(1)
+      client.cluster.scan! # TODO - automate out this inconvenience
+      ismaster = client.database.command(:ismaster => 1)
+      expect(ismaster['ok']).to eq(1)
     end
   end
 end
