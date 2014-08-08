@@ -470,7 +470,6 @@ describe Mongo::Client do
     begin
       mo = Mongo::Orchestration::Service.new
     rescue => ex
-      puts "***** mongo-orchestration is not available, skipping mongo-orchestration related tests *****"
       c.filter_run_excluding :orchestration => true
     end
   end
@@ -508,8 +507,8 @@ describe Mongo::Client do
     end
 
     it 'connects to configuration single and responds to ismaster' do
-      expect(JSON.parse(orch.response.body)['service']).to eq('mongo-orchestration')
-      status = JSON.parse(cluster.response.body)
+      expect(orch.response.parsed_response['service']).to eq('mongo-orchestration')
+      status = cluster.response.parsed_response
       uri = status['uri']
       expect(uri).to match(/:(\d+)/)
       client = described_class.new([uri], :database => TEST_DB)

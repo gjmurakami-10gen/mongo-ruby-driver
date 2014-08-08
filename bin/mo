@@ -33,7 +33,7 @@ configurations = [
     {
         orchestration: "hosts",
         post_data: {
-            id: "single",
+            id: "standalone",
             name: "mongod",
             procParams: {
                 dbpath: "#{$DBPATH}",
@@ -143,14 +143,14 @@ config = configurations.find{|config| config[:post_data][:id] == id}
 raise "id:#{id.inspect} not found" unless config
 p config if $VERBOSE
 
-orch = Mongo::Orchestration::Service.new
-cluster = orch.configure(config)
+service = Mongo::Orchestration::Service.new
+cluster = service.configure(config)
 cluster.send(action.to_sym)
 action_result = cluster.response.code == 404 ? 'Error' : 'OK'
 puts "#{action} #{action_result} - #{cluster.result_message}"
 
 if action != 'stop'
-  status = JSON.parse(cluster.response.body)
+  status = cluster.response.parsed_response
   uri = status['uri']
   client = Mongo::Client.new([uri], :database => :test)
 

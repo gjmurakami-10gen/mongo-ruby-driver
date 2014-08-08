@@ -23,7 +23,7 @@ module Mongo
 
       DEFAULT_BASE_URI = 'http://localhost:8889'
       base_uri (ENV['MONGO_ORCHESTRATION'] || DEFAULT_BASE_URI)
-      attr_reader :uri, :config, :request, :response
+      attr_reader :uri, :object, :config, :method, :request, :response
 
       @@debug = false
 
@@ -35,10 +35,10 @@ module Mongo
         @@debug = value
       end
 
-      def initialize(uri = '', config = nil, response = nil)
+      def initialize(uri = '', object = nil, config = nil)
         @uri = uri
+        @object = object
         @config = config
-        @response = response
       end
 
       def http_request(method, path = nil)
@@ -93,12 +93,13 @@ module Mongo
     class Hosts < Cluster; end
     class RS < Cluster; end
     class SH < Cluster; end
+    class Host < Base; end
 
     class Service
       VERSION_REQUIRED = "0.9"
       ORCHESTRATION_CLASS = { 'hosts' => Hosts, 'rs' => RS, 'sh' => SH }
 
-      def initialize(uri = '', config = nil, response = nil)
+      def initialize(uri = '')
         super
         check_service
       end
@@ -106,8 +107,7 @@ module Mongo
       def check_service
         get
         raise "mongo-orchestration service #{base_uri.inspect} is not available. Please start it via 'python server.py start'" if @response.code == 404
-        json = JSON.parse(@response.body)
-        version = json['version']
+        version = @response.parsed_response['version']
         raise "mongo-orchestration service version #{version.inspect} is insufficient, #{VERSION_REQUIRED} is required" if version < VERSION_REQUIRED
         self
       end
@@ -115,22 +115,69 @@ module Mongo
       def configure(config)
         orchestration = config[:orchestration]
         uri = [@uri, orchestration].join('/')
-        ORCHESTRATION_CLASS[orchestration].new(uri, config)
+        ORCHESTRATION_CLASS[orchestration].new(uri, nil, config)
+      end
+    end
+
+    class Host
+      def initialize(uri = '', object = nil)
+        super
+      end
+
+      def status
+        get
+        @object = @response.parsed_response if @response.code == 200
+        self
+      end
+
+      def start
+        put(:start)
+        if @response.code == 200
+          @object = @response.parsed_response
+        else
+          raise "#{self.class.name}##{__method__} #{result_message}"
+        end
+        self
+      end
+
+      def stop
+        put(:stop)
+        self
+      end
+
+      def restart
+        put(:restart)
+        if @response.code == 200
+          @object = @response.parsed_response
+        else
+          raise "#{self.class.name}##{__method__} #{result_message}"
+        end
+        self
       end
     end
 
     class Cluster
-      def initialize(uri = '', config = nil, response = nil)
+      def initialize(uri = '', object = nil, config = nil)
         super
         @post_data = @config[:post_data]
         @id = @post_data[:id]
       end
 
-      def start
+      def status
         get(@id)
+        @object = @response.parsed_response if @response.code == 200
+        self
+      end
+
+      def start
+        status
         if @response.code != 200
           post(nil, @post_data)
-          raise "#{self.class.name}##{__method__} #{result_message}" unless @response.code == 200
+          if @response.code == 200
+            @object = @response.parsed_response
+          else
+            raise "#{self.class.name}##{__method__} #{result_message}"
+          end
         else
           #put(@id)
         end
@@ -138,35 +185,36 @@ module Mongo
       end
 
       def stop
-        get(@id)
+        status
         if @response.code == 200
           delete(@id)
           raise "#{self.class.name}##{__method__} #{result_message}" unless @response.code == 204
+          #@object = nil
         end
-        self
-      end
-
-      def status
-        get(@id)
         self
       end
 
     end
 
     class Hosts
-      def initialize(uri = '', config = nil, response = nil)
+      def initialize(uri = '', object = nil, config = nil)
         super
+      end
+
+      def host
+        uri = [@uri, @object['id']].join('/')
+        Host.new(uri, @object)
       end
     end
 
     class RS
-      def initialize(uri = '', config = nil, response = nil)
+      def initialize(uri = '', object = nil, config = nil)
         super
       end
     end
 
     class SH
-      def initialize(uri = '', config = nil, response = nil)
+      def initialize(uri = '', object = nil, config = nil)
         super
       end
     end
