@@ -136,10 +136,151 @@ describe Mongo::Orchestration::Hosts, :orchestration => true do
   end
 end
 
-describe Mongo::Orchestration::RS, :orchestration => true do
+replicaset_config = {
+    orchestration: "rs",
+    post_data: {
+        id: "repl0",
+        members: [
+            {
+                procParams: {
+                    nohttpinterface: true,
+                    journal: true,
+                    noprealloc: true,
+                    nssize: 1,
+                    oplogSize: 150,
+                    smallfiles: true
+                },
+                rsParams: {
+                    priority: 99
+                }
+            },
+            {
+                procParams: {
+                    nohttpinterface: true,
+                    journal: true,
+                    noprealloc: true,
+                    nssize: 1,
+                    oplogSize: 150,
+                    smallfiles: true
+                },
+                rsParams: {
+                    priority: 1.1
+                }
+            },
+            {
+                procParams: {
+                    nohttpinterface: true,
+                    journal: true,
+                    noprealloc: true,
+                    nssize: 1,
+                    oplogSize: 150,
+                    smallfiles: true
+                }
+            }
+        ]
+    }
+}
 
+describe Mongo::Orchestration::RS, :orchestration => true do
+  let(:cluster) { @cluster }
+
+  before(:all) do
+    @service = Mongo::Orchestration::Service.new
+    @cluster = @service.configure(replicaset_config)
+    @cluster.start
+  end
+
+  after(:all) do
+    @cluster.stop
+  end
+
+  it 'provides primary' do
+    primary = @cluster.primary
+    expect(primary).to be_instance_of(Mongo::Orchestration::Host)
+  end
+
+  it 'provides secondaries, arbiters, and hidden member methods' do
+    [
+        [:secondaries, 2],
+        [:arbiters, 0],
+        [:hidden, 0]
+    ].each do |method, size|
+      hosts = @cluster.send(method)
+      expect(hosts.size).to eq(size)
+      hosts.each do |host|
+        expect(host).to be_instance_of(Mongo::Orchestration::Host)
+      end
+    end
+  end
 end
 
-describe Mongo::Orchestration::SH, :orchestration => true do
+sharded_configuration = {
+    orchestration: "sh",
+    post_data: {
+        id: "shard_cluster_1",
+        configsvrs: [
+            {
+            }
+        ],
+        members: [
+            {
+                id: "sh1",
+                shardParams: {
+                    procParams: {
+                    }
+                }
+            },
+            {
+                id: "sh2",
+                shardParams: {
+                    procParams: {
+                    }
+                }
+            }
+        ],
+        routers: [
+            {
+            },
+            {
+            }
+        ]
+    }
+}
 
+describe Mongo::Orchestration::SH, :orchestration => true do
+  let(:cluster) { @cluster }
+
+  before(:all) do
+    @service = Mongo::Orchestration::Service.new
+    @cluster = @service.configure(sharded_configuration)
+    @cluster.start
+  end
+
+  after(:all) do
+    @cluster.stop
+  end
+
+  it 'provides members' do
+    hosts = @cluster.members
+    expect(hosts.size).to eq(2)
+    hosts.each do |host|
+      expect(host).to be_instance_of(Mongo::Orchestration::Host)
+    end
+  end
+
+  it 'provides configsvrs' do # TODO - unify configservers
+    hosts = @cluster.configsvrs
+    expect(hosts.size).to eq(1)
+    hosts.each do |host|
+      expect(host).to be_instance_of(Mongo::Orchestration::Host)
+    end
+  end
+
+  it 'provides routers' do
+    hosts = @cluster.routers
+    expect(hosts.size).to eq(2)
+    hosts.each do |host|
+      expect(host).to be_instance_of(Mongo::Orchestration::Host)
+    end
+  end
 end

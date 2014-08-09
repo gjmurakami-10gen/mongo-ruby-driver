@@ -78,7 +78,7 @@ module Mongo
       def result_message
         msg = "#{@method.upcase} #{@request}, #{@response.code} #{humanized_http_response_class_name}"
         msg += ", post data: #{@post_data.inspect}" if @method == :post
-        return msg if @response['content-length'] == "0"
+        return msg if @response.headers['content-length'] == 0
         if @response.headers['content-type'].include?('application/json')
           msg += ", response JSON:\n#{JSON.pretty_generate(@response)}"
         else
@@ -211,11 +211,80 @@ module Mongo
       def initialize(uri = '', object = nil, config = nil)
         super
       end
+
+    private
+      def host(host_data, object = nil)
+        uri = [@uri, 'members', host_data['_id']].join('/')
+        Host.new(uri, object)
+      end
+
+      def hosts(member_type)
+        uri = [@uri, @id, member_type].join('/')
+        response = self.class.get(uri)
+        hosts_data = (response.code == 200) ? response.parsed_response : []
+        hosts_data.collect{|host_data| host(host_data)}
+      end
+
+    public
+      def primary
+        uri = [@uri, @id, 'primary'].join('/')
+        response = self.class.get(uri)
+        if response.code == 200
+          object = response.parsed_response
+          host(object, object)
+        else
+          nil
+        end
+      end
+
+      def secondaries
+        hosts('secondaries')
+      end
+
+      def arbiters
+        hosts('arbiters')
+      end
+
+      def hidden
+        hosts('hidden')
+      end
     end
 
     class SH
       def initialize(uri = '', object = nil, config = nil)
         super
+      end
+
+    private
+      def host(host_data, object = nil)
+        uri = [@uri, 'members', host_data['_id']].join('/')
+        Host.new(uri, object)
+      end
+
+      def hosts(member_type)
+        uri = [@uri, @id, member_type].join('/')
+        response = self.class.get(uri)
+        hosts_data = (response.code == 200) ? response.parsed_response : []
+        hosts_data.collect{|host_data| host(host_data)}
+      end
+
+    public
+      def members
+        @object[__method__.to_s].collect do |host_data|
+          host(host_data)
+        end
+      end
+
+      def configsvrs #configservers
+        @object[__method__.to_s].collect do |host_data|
+          host(host_data)
+        end
+      end
+
+      def routers
+        @object[__method__.to_s].collect do |host_data|
+          host(host_data)
+        end
       end
     end
   end
