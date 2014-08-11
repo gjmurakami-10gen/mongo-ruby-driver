@@ -41,34 +41,30 @@ module Mongo
         @config = config
       end
 
-      def http_request(method, path = nil)
+      def http_request(method, path = nil, options = {})
         @method = method
         @request = [@uri, path].compact.join('/')
-        #puts "#{@method.upcase: #{@request}" if debug
-        @response = self.class.send(method, @request)
+        @options = options
+        #puts "#{@method.upcase: #{@request}, options: #{@options}" if debug
+        @response = self.class.send(@method, @request, @options)
         puts result_message if debug
         self
       end
 
-      def post(path = nil, post_data)
-        @method = __method__
-        @request = [@uri, path].compact.join('/')
-        #puts "#{__method__} request: #{@request.inspect} post_data: #{post_data.inspect}" if debug
-        @response = self.class.post(@request, {body: post_data.to_json})
-        puts result_message if debug
-        self
+      def post(path = nil, options)
+        http_request(__method__, path, options)
       end
 
-      def get(path = nil)
-        http_request(__method__, path)
+      def get(path = nil, options = {})
+        http_request(__method__, path, options)
       end
 
-      def put(path = nil)
-        http_request(__method__, path)
+      def put(path = nil, options = {})
+        http_request(__method__, path, options)
       end
 
-      def delete(path = nil)
-        http_request(__method__, path)
+      def delete(path = nil, options = {})
+        http_request(__method__, path, options)
       end
 
       def humanized_http_response_class_name
@@ -76,8 +72,8 @@ module Mongo
       end
 
       def result_message
-        msg = "#{@method.upcase} #{@request}, #{@response.code} #{humanized_http_response_class_name}"
-        msg += ", post data: #{@post_data.inspect}" if @method == :post
+        msg = "#{@method.upcase} #{@request}, options: #{@options.inspect}"
+        msg += ", #{@response.code} #{humanized_http_response_class_name}"
         return msg if @response.headers['content-length'] == 0
         if @response.headers['content-type'].include?('application/json')
           msg += ", response JSON:\n#{JSON.pretty_generate(@response)}"
@@ -172,7 +168,7 @@ module Mongo
       def start
         status
         if @response.code != 200
-          post(nil, @post_data)
+          post(nil, {body: @post_data.to_json})
           if @response.code == 200
             @object = @response.parsed_response
           else
