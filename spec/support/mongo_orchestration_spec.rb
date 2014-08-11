@@ -268,8 +268,8 @@ describe Mongo::Orchestration::SH, :orchestration => true do
     end
   end
 
-  it 'provides configsvrs' do # TODO - unify configservers
-    hosts = @cluster.configsvrs
+  it 'provides configservers' do # TODO - unify configservers / configsvrs
+    hosts = @cluster.configservers
     expect(hosts.size).to eq(1)
     hosts.each do |host|
       expect(host).to be_instance_of(Mongo::Orchestration::Host)

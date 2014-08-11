@@ -74,7 +74,7 @@ module Mongo
       def result_message
         msg = "#{@method.upcase} #{@request}, options: #{@options.inspect}"
         msg += ", #{@response.code} #{humanized_http_response_class_name}"
-        return msg if @response.headers['content-length'] == 0
+        return msg if @response.headers['content-length'] == "0" # not Fixnum 0
         if @response.headers['content-type'].include?('application/json')
           msg += ", response JSON:\n#{JSON.pretty_generate(@response)}"
         else
@@ -127,28 +127,38 @@ module Mongo
       end
 
       def start
-        put(:start)
-        if @response.code == 200
-          @object = @response.parsed_response
-        else
-          raise "#{self.class.name}##{__method__} #{result_message}"
-        end
+        put(__method__)
+        raise "#{self.class.name}##{__method__} #{result_message}" unless @response.code == 200
         self
       end
 
       def stop
-        put(:stop)
+        put(__method__)
+        raise "#{self.class.name}##{__method__} #{result_message}" unless @response.code == 200
         self
       end
 
       def restart
-        put(:restart)
-        if @response.code == 200
-          @object = @response.parsed_response
-        else
-          raise "#{self.class.name}##{__method__} #{result_message}"
-        end
+        put(__method__)
+        raise "#{self.class.name}##{__method__} #{result_message}" unless @response.code == 200
         self
+      end
+
+      def freeze
+        put(__method__)
+        raise "#{self.class.name}##{__method__} #{result_message}" unless @response.code == 200
+        self
+      end
+    end
+
+    class Hosts
+      def initialize(uri = '', object = nil, config = nil)
+        super
+      end
+
+      def host
+        uri = [@uri, @object['id']].join('/')
+        Host.new(uri, @object)
       end
     end
 
@@ -159,6 +169,13 @@ module Mongo
         @id = @post_data[:id]
       end
 
+    private
+      def host(host_data, object = nil)
+        uri = [@uri, 'members', host_data['id']].join('/')
+        Host.new(uri, object)
+      end
+
+    public
       def status
         get(@id)
         @object = @response.parsed_response if @response.code == 200
@@ -192,37 +209,22 @@ module Mongo
 
     end
 
-    class Hosts
-      def initialize(uri = '', object = nil, config = nil)
-        super
-      end
-
-      def host
-        uri = [@uri, @object['id']].join('/')
-        Host.new(uri, @object)
-      end
-    end
-
     class RS
       def initialize(uri = '', object = nil, config = nil)
         super
       end
 
     private
-      def host(host_data, object = nil)
-        uri = [@uri, 'members', host_data['_id']].join('/')
-        Host.new(uri, object)
-      end
-
-      def hosts(member_type)
+     def hosts(member_type)
         uri = [@uri, @id, member_type].join('/')
         response = self.class.get(uri)
         hosts_data = (response.code == 200) ? response.parsed_response : []
-        hosts_data.collect{|host_data| host(host_data)}
+        [hosts_data].flatten(1).collect{|host_data| host(host_data)}
       end
 
     public
       def primary
+        #hosts('primary').first # does not initialize with object and does not have uri /rs/{repl-id}/primary
         uri = [@uri, @id, 'primary'].join('/')
         response = self.class.get(uri)
         if response.code == 200
@@ -252,12 +254,10 @@ module Mongo
       end
 
     private
-      def host(host_data, object = nil)
-        uri = [@uri, 'members', host_data['_id']].join('/')
-        Host.new(uri, object)
-      end
-
       def hosts(member_type)
+        # @object[member_type.to_s].collect do |host_data| # members, configsvrs, routers
+        #  host(host_data)
+        # end
         uri = [@uri, @id, member_type].join('/')
         response = self.class.get(uri)
         hosts_data = (response.code == 200) ? response.parsed_response : []
@@ -266,21 +266,15 @@ module Mongo
 
     public
       def members
-        @object[__method__.to_s].collect do |host_data|
-          host(host_data)
-        end
+        hosts(__method__)
       end
 
-      def configsvrs #configservers
-        @object[__method__.to_s].collect do |host_data|
-          host(host_data)
-        end
+      def configservers # JSON configuration response uses configsvrs # TODO - unify configservers / configsvrs
+        hosts(__method__)
       end
 
       def routers
-        @object[__method__.to_s].collect do |host_data|
-          host(host_data)
-        end
+        hosts(__method__)
       end
     end
   end
