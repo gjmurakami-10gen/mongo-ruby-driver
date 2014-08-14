@@ -170,9 +170,16 @@ module Mongo
       end
 
     private
-      def host(host_data, object = nil)
-        uri = [@uri, 'members', host_data['id']].join('/')
-        Host.new(uri, object)
+      def host(resource, host_data, id_key)
+        uri = [@uri, resource, host_data[id_key]].join('/')
+        Host.new(uri, host_data)
+      end
+
+      def hosts(get_resource, resource, id_key)
+        uri = [@uri, @id, get_resource].join('/')
+        response = self.class.get(uri)
+        hosts_data = (response.code == 200) ? response.parsed_response : []
+        [hosts_data].flatten(1).collect{|host_data| host(resource, host_data, id_key)}
       end
 
     public
@@ -214,37 +221,32 @@ module Mongo
         super
       end
 
-    private
-     def hosts(member_type)
-        uri = [@uri, @id, member_type].join('/')
-        response = self.class.get(uri)
-        hosts_data = (response.code == 200) ? response.parsed_response : []
-        [hosts_data].flatten(1).collect{|host_data| host(host_data)}
+      def members
+        hosts('members', 'members', '_id'); # host_id
       end
 
-    public
       def primary
         #hosts('primary').first # does not initialize with object and does not have uri /rs/{repl-id}/primary
         uri = [@uri, @id, 'primary'].join('/')
         response = self.class.get(uri)
         if response.code == 200
           object = response.parsed_response
-          host(object, object)
+          host('members', object, '_id')
         else
           nil
         end
       end
 
       def secondaries
-        hosts('secondaries')
+        hosts('secondaries', 'members', '_id'); # host_id
       end
 
       def arbiters
-        hosts('arbiters')
+        hosts('arbiters', 'members', '_id'); # host_id
       end
 
       def hidden
-        hosts('hidden')
+        hosts('hidden', 'members', '_id'); # host_id
       end
     end
 
@@ -253,28 +255,16 @@ module Mongo
         super
       end
 
-    private
-      def hosts(member_type)
-        # @object[member_type.to_s].collect do |host_data| # members, configsvrs, routers
-        #  host(host_data)
-        # end
-        uri = [@uri, @id, member_type].join('/')
-        response = self.class.get(uri)
-        hosts_data = (response.code == 200) ? response.parsed_response : []
-        hosts_data.collect{|host_data| host(host_data)}
-      end
-
-    public
       def members
-        hosts(__method__)
+        hosts(__method__, 'members', 'id')
       end
 
       def configservers # JSON configuration response uses configsvrs # TODO - unify configservers / configsvrs
-        hosts(__method__)
+        hosts(__method__, 'members', 'id')
       end
 
       def routers
-        hosts(__method__)
+        hosts(__method__, 'members', 'id')
       end
     end
   end
