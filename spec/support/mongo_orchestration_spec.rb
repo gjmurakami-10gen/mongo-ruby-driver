@@ -23,7 +23,7 @@ describe Mongo::Orchestration::Base, :orchestration => true do
     expect(base.response.parsed_response['service']).to eq('mongo-orchestration')
     expect(base.response.response.class.name).to eq("Net::HTTPOK")
     expect(base.humanized_http_response_class_name).to eq("OK")
-    expect(base.result_message).to match(/^GET .* OK,.* JSON:/)
+    expect(base.message_summary).to match(/^GET .* OK,.* JSON:/)
   end
 end
 
@@ -60,28 +60,28 @@ describe Mongo::Orchestration::Cluster, :orchestration => true do
     cluster.stop # force stopped
 
     cluster.start
-    expect(cluster.result_message).to match(%r{^POST /hosts, options: {.*}, 200 OK, response JSON:})
+    expect(cluster.message_summary).to match(%r{^POST /hosts, options: {.*}, 200 OK, response JSON:})
     expect(cluster.object).to be
     expect(cluster.object['serverInfo']['ok']).to eq(1.0)
 
     cluster.start # start for already started
-    expect(cluster.result_message).to match(%r{^GET /hosts/standalone, options: {}, 200 OK, response JSON:})
+    expect(cluster.message_summary).to match(%r{^GET /hosts/standalone, options: {}, 200 OK, response JSON:})
 
     cluster.status # status for started
-    expect(cluster.result_message).to match(%r{^GET /hosts/standalone, options: {}, 200 OK, response JSON:})
+    expect(cluster.message_summary).to match(%r{^GET /hosts/standalone, options: {}, 200 OK, response JSON:})
 
     uri = cluster.object['uri']
 
     # add client connection when Ruby is ready for prime time
 
     cluster.stop
-    expect(cluster.result_message).to match(%r{^DELETE /hosts/standalone, options: {}, 204 No Content})
+    expect(cluster.message_summary).to match(%r{^DELETE /hosts/standalone, options: {}, 204 No Content})
 
     cluster.stop # stop for already stopped
-    expect(cluster.result_message).to match(%r{GET /hosts/standalone, options: {}, 404 Not Found})
+    expect(cluster.message_summary).to match(%r{GET /hosts/standalone, options: {}, 404 Not Found})
 
     cluster.status # status for stopped
-    expect(cluster.result_message).to match(%r{GET /hosts/standalone, options: {}, 404 Not Found})
+    expect(cluster.message_summary).to match(%r{GET /hosts/standalone, options: {}, 404 Not Found})
   end
 end
 
@@ -95,19 +95,19 @@ describe Mongo::Orchestration::Hosts, :orchestration => true do
     expect(host).to be_instance_of(Mongo::Orchestration::Host)
 
     host.status
-    expect(host.result_message).to match(%r{^GET /hosts/standalone, options: {}, 200 OK, response JSON:})
+    expect(host.message_summary).to match(%r{^GET /hosts/standalone, options: {}, 200 OK, response JSON:})
 
     host.stop
-    expect(host.result_message).to match(%r{^PUT /hosts/standalone/stop, options: {}, 200 OK})
+    expect(host.message_summary).to match(%r{^PUT /hosts/standalone/stop, options: {}, 200 OK})
 
     host.status # TODO - need status for no process
-    expect(host.result_message).to match(%r{^GET /hosts/standalone, options: {}, 200 OK, response JSON:})
+    expect(host.message_summary).to match(%r{^GET /hosts/standalone, options: {}, 200 OK, response JSON:})
 
     host.start
-    expect(host.result_message).to match(%r{^PUT /hosts/standalone/start, options: {}, 200 OK})
+    expect(host.message_summary).to match(%r{^PUT /hosts/standalone/start, options: {}, 200 OK})
 
     host.restart
-    expect(host.result_message).to match(%r{^PUT /hosts/standalone/restart, options: {}, 200 OK})
+    expect(host.message_summary).to match(%r{^PUT /hosts/standalone/restart, options: {}, 200 OK})
 
     cluster.stop
   end
@@ -174,19 +174,21 @@ describe Mongo::Orchestration::RS, :orchestration => true do
   it 'provides primary' do
     primary = @cluster.primary
     expect(primary).to be_instance_of(Mongo::Orchestration::Host) # check object uri
+    expect(primary.base_path).to eq('/rs/repl0/primary')
   end
 
-  it 'provides secondaries, arbiters and hidden member methods' do # TODO - check request path, object host_id
+  it 'provides secondaries, arbiters and hidden member methods' do
     [
-        [:members, 3],
-        [:secondaries, 2],
-        [:arbiters, 0],
-        [:hidden, 0]
-    ].each do |method, size|
+        [:members,     3, %r{/rs/repl0/members/}],
+        [:secondaries, 2, %r{/rs/repl0/members/}],
+        [:arbiters,    0, %r{/rs/repl0/members/}],
+        [:hidden,      0, %r{/rs/repl0/members/}]
+    ].each do |method, size, base_path|
       hosts = @cluster.send(method)
       expect(hosts.size).to eq(size)
       hosts.each do |host|
         expect(host).to be_instance_of(Mongo::Orchestration::Host)
+        expect(host.base_path).to match(base_path)
       end
     end
   end

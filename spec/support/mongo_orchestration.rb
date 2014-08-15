@@ -23,7 +23,7 @@ module Mongo
 
       DEFAULT_BASE_URI = 'http://localhost:8889'
       base_uri (ENV['MONGO_ORCHESTRATION'] || DEFAULT_BASE_URI)
-      attr_reader :uri, :object, :config, :method, :request, :response
+      attr_reader :base_path, :object, :config, :method, :abs_path, :response
 
       @@debug = false
 
@@ -35,19 +35,18 @@ module Mongo
         @@debug = value
       end
 
-      def initialize(uri = '', object = nil, config = nil)
-        @uri = uri
+      def initialize(base_path = '', object = nil, config = nil)
+        @base_path = base_path
         @object = object
         @config = config
       end
 
       def http_request(method, path = nil, options = {})
         @method = method
-        @request = [@uri, path].compact.join('/')
+        @abs_path = [@base_path, path].compact.join('/')
         @options = options
-        #puts "#{@method.upcase: #{@request}, options: #{@options}" if debug
-        @response = self.class.send(@method, @request, @options)
-        puts result_message if debug
+        @response = self.class.send(@method, @abs_path, @options)
+        puts message_summary if debug
         self
       end
 
@@ -71,8 +70,8 @@ module Mongo
         @response.response.class.name.split('::').last.sub(/^HTTP/, '').gsub(/([a-z\d])([A-Z])/, '\1 \2')
       end
 
-      def result_message
-        msg = "#{@method.upcase} #{@request}, options: #{@options.inspect}"
+      def message_summary
+        msg = "#{@method.upcase} #{@abs_path}, options: #{@options.inspect}"
         msg += ", #{@response.code} #{humanized_http_response_class_name}"
         return msg if @response.headers['content-length'] == "0" # not Fixnum 0
         if @response.headers['content-type'].include?('application/json')
@@ -81,21 +80,12 @@ module Mongo
           msg += ", response: #{@response.inspect}"
         end
       end
-
     end
 
-    class Service < Base; end
-    class Cluster < Base; end
-    class Hosts < Cluster; end
-    class RS < Cluster; end
-    class SH < Cluster; end
-    class Host < Base; end
-
-    class Service
+    class Service < Base
       VERSION_REQUIRED = "0.9"
-      ORCHESTRATION_CLASS = { 'hosts' => Hosts, 'rs' => RS, 'sh' => SH }
 
-      def initialize(uri = '')
+      def initialize(base_path = '')
         super
         check_service
       end
@@ -107,16 +97,10 @@ module Mongo
         raise "mongo-orchestration service version #{version.inspect} is insufficient, #{VERSION_REQUIRED} is required" if version < VERSION_REQUIRED
         self
       end
-
-      def configure(config)
-        orchestration = config[:orchestration]
-        uri = [@uri, orchestration].join('/')
-        ORCHESTRATION_CLASS[orchestration].new(uri, nil, config)
-      end
     end
 
-    class Host
-      def initialize(uri = '', object = nil)
+    class Host < Base
+      def initialize(base_path = '', object = nil)
         super
       end
 
@@ -127,62 +111,36 @@ module Mongo
       end
 
       def start
-        put(__method__)
-        raise "#{self.class.name}##{__method__} #{result_message}" unless @response.code == 200
-        self
+        put_with_check(__method__)
       end
 
       def stop
-        put(__method__)
-        raise "#{self.class.name}##{__method__} #{result_message}" unless @response.code == 200
-        self
+        put_with_check(__method__)
       end
 
       def restart
-        put(__method__)
-        raise "#{self.class.name}##{__method__} #{result_message}" unless @response.code == 200
-        self
+        put_with_check(__method__)
       end
 
       def freeze
-        put(__method__)
-        raise "#{self.class.name}##{__method__} #{result_message}" unless @response.code == 200
+        put_with_check(__method__)
+      end
+
+    private
+      def put_with_check(method)
+        put(method)
+        raise "#{self.class.name}##{method} #{message_summary}" unless @response.code == 200
         self
       end
     end
 
-    class Hosts
-      def initialize(uri = '', object = nil, config = nil)
-        super
-      end
-
-      def host
-        uri = [@uri, @object['id']].join('/')
-        Host.new(uri, @object)
-      end
-    end
-
-    class Cluster
-      def initialize(uri = '', object = nil, config = nil)
+    class Cluster < Base
+      def initialize(base_path = '', object = nil, config = nil)
         super
         @post_data = @config[:post_data]
         @id = @post_data[:id]
       end
 
-    private
-      def host(resource, host_data, id_key)
-        uri = [@uri, resource, host_data[id_key]].join('/')
-        Host.new(uri, host_data)
-      end
-
-      def hosts(get_resource, resource, id_key)
-        uri = [@uri, @id, get_resource].join('/')
-        response = self.class.get(uri)
-        hosts_data = (response.code == 200) ? response.parsed_response : []
-        [hosts_data].flatten(1).collect{|host_data| host(resource, host_data, id_key)}
-      end
-
-    public
       def status
         get(@id)
         @object = @response.parsed_response if @response.code == 200
@@ -196,7 +154,7 @@ module Mongo
           if @response.code == 200
             @object = @response.parsed_response
           else
-            raise "#{self.class.name}##{__method__} #{result_message}"
+            raise "#{self.class.name}##{__method__} #{message_summary}"
           end
         else
           #put(@id)
@@ -208,16 +166,39 @@ module Mongo
         status
         if @response.code == 200
           delete(@id)
-          raise "#{self.class.name}##{__method__} #{result_message}" unless @response.code == 204
+          raise "#{self.class.name}##{__method__} #{message_summary}" unless @response.code == 204
           #@object = nil
         end
         self
       end
 
+    private
+      def host(resource, host_data, id_key)
+        base_path = [@base_path, @id, resource, host_data[id_key]].join('/')
+        Host.new(base_path, host_data)
+      end
+
+      def hosts(get_resource, resource, id_key)
+        base_path = [@base_path, @id, get_resource].join('/')
+        response = self.class.get(base_path)
+        hosts_data = (response.code == 200) ? response.parsed_response : []
+        [hosts_data].flatten(1).collect{|host_data| host(resource, host_data, id_key)}
+      end
     end
 
-    class RS
-      def initialize(uri = '', object = nil, config = nil)
+    class Hosts < Cluster
+      def initialize(base_path = '', object = nil, config = nil)
+        super
+      end
+
+      def host
+        base_path = [@base_path, @object['id']].join('/')
+        Host.new(base_path, @object)
+      end
+    end
+
+    class RS < Cluster
+      def initialize(base_path = '', object = nil, config = nil)
         super
       end
 
@@ -226,32 +207,27 @@ module Mongo
       end
 
       def primary
-        #hosts('primary').first # does not initialize with object and does not have uri /rs/{repl-id}/primary
-        uri = [@uri, @id, 'primary'].join('/')
-        response = self.class.get(uri)
-        if response.code == 200
-          object = response.parsed_response
-          host('members', object, '_id')
-        else
-          nil
-        end
+        #hosts('primary', 'members', '_id').first
+        base_path = [@base_path, @id, 'primary'].join('/')
+        response = self.class.get(base_path)
+        return (response.code == 200) ? Host.new(base_path, response.parsed_response) : nil
       end
 
       def secondaries
-        hosts('secondaries', 'members', '_id'); # host_id
+        hosts('secondaries', 'members', '_id'); # 'hosts', 'host_id'
       end
 
       def arbiters
-        hosts('arbiters', 'members', '_id'); # host_id
+        hosts('arbiters', 'members', '_id'); # 'hosts', 'host_id'
       end
 
       def hidden
-        hosts('hidden', 'members', '_id'); # host_id
+        hosts('hidden', 'members', '_id'); # 'hosts', 'host_id'
       end
     end
 
-    class SH
-      def initialize(uri = '', object = nil, config = nil)
+    class SH < Cluster
+      def initialize(base_path = '', object = nil, config = nil)
         super
       end
 
@@ -260,11 +236,21 @@ module Mongo
       end
 
       def configservers # JSON configuration response uses configsvrs # TODO - unify configservers / configsvrs
-        hosts(__method__, 'members', 'id')
+        hosts(__method__, 'members', 'id') # 'hosts', 'host_id'
       end
 
       def routers
-        hosts(__method__, 'members', 'id')
+        hosts(__method__, 'members', 'id') # 'hosts', 'host_id'
+      end
+    end
+
+    class Service
+      ORCHESTRATION_CLASS = { 'hosts' => Hosts, 'rs' => RS, 'sh' => SH }
+
+      def configure(config)
+        orchestration = config[:orchestration]
+        base_path = [@base_path, orchestration].join('/')
+        ORCHESTRATION_CLASS[orchestration].new(base_path, nil, config)
       end
     end
   end
