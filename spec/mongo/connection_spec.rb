@@ -112,14 +112,7 @@ describe Mongo::Connection do
   describe '#dispatch' do
 
     let!(:connection) do
-      described_class.new(
-        address,
-        5,
-        :username => 'test-user',
-        :password => 'password',
-        :database => TEST_DB,
-        :auth_mech => :mongodb_cr
-      )
+      described_class.new(address, 5, :database => TEST_DB)
     end
 
     let(:documents) do
@@ -131,7 +124,7 @@ describe Mongo::Connection do
     end
 
     let(:query) do
-      Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, {})
+      Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { 'name' => 'testing' })
     end
 
     let(:delete) do

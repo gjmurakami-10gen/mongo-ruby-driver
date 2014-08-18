@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-module Mongo
+require 'mongo/operation/command/response'
 
+module Mongo
   module Operation
 
     # A MongoDB command operation.
@@ -79,7 +80,7 @@ module Mongo
           context = Mongo::ServerPreference.get(:mode => :primary).server.context
         end
         context.with_connection do |connection|
-          connection.dispatch([message])
+          Response.new(connection.dispatch([ message ])).verify!
         end
       end
 
@@ -101,7 +102,7 @@ module Mongo
       # @return [ Hash ] Command options.
       #
       # @since 2.0.0
-      def opts
+      def options
         unless @spec[:opts][:limit] && @spec[:opts][:limit] == -1
           return @spec[:opts].merge(:limit => -1)
         end
@@ -124,7 +125,7 @@ module Mongo
       #
       # @since 2.0.0
       def message
-        Protocol::Query.new(db_name, Database::COMMAND, selector, opts)
+        Protocol::Query.new(db_name, Database::COMMAND, selector, options)
       end
     end
   end

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'mongo/indexable'
+
 module Mongo
 
   # Represents a collection in the database and operations that can directly be
@@ -20,6 +22,7 @@ module Mongo
   # @since 2.0.0
   class Collection
     extend Forwardable
+    include Indexable
 
     # @return [ Mongo::Database ] The database the collection resides in.
     attr_reader :database
@@ -69,7 +72,7 @@ module Mongo
     # @param [ Array<Hash> ] documents The documents to insert.
     # @param [ Hash ] options The insert options.
     #
-    # @return [ Hash ] The result of the insert command.
+    # @return [ Mongo::Operation::Response ] The database response wrapper.
     #
     # @since 2.0.0
     def insert(documents, options = {})
@@ -80,7 +83,7 @@ module Mongo
         :coll_name => name,
         :write_concern => write_concern,
         :opts => options
-      ).execute(server.context).documents[0]
+      ).execute(server.context)
     end
 
     # Exception that is raised when trying to create a collection with no name.

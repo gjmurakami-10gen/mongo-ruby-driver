@@ -1,31 +1,28 @@
 require 'spec_helper'
 
 describe Mongo::Operation::Command do
-  include_context 'operation'
 
   let(:selector) { { :ismaster => 1 } }
   let(:opts) { { :limit => -1 } }
   let(:spec) do
     { :selector => selector,
       :opts     => opts,
-      :db_name  => db_name
+      :db_name  => TEST_DB
     }
   end
   let(:op) { described_class.new(spec) }
 
   describe '#initialize' do
 
-    context 'spec' do
-
-      it 'sets the spec' do
-        expect(op.spec).to be(spec)
-      end
+    it 'sets the spec' do
+      expect(op.spec).to be(spec)
     end
   end
 
   describe '#==' do
 
-    context ' when two ops have different specs' do
+    context 'when the ops have different specs' do
+
       let(:other_selector) { { :ping => 1 } }
       let(:other_spec) do
         { :selector => other_selector,
@@ -42,88 +39,73 @@ describe Mongo::Operation::Command do
   end
 
   context '#merge' do
+
     let(:other_op) { described_class.new(spec) }
 
-    it 'is not allowed' do
+    it 'raises an exception' do
       expect{ op.merge(other_op) }.to raise_exception
     end
   end
 
   context '#merge!' do
+
     let(:other_op) { described_class.new(spec) }
 
-    it 'is not allowed' do
+    it 'raises an exception' do
       expect{ op.merge!(other_op) }.to raise_exception
     end
   end
 
   describe '#execute' do
 
-    context 'message' do
+    let(:client) do
+      Mongo::Client.new(
+        [ '127.0.0.1:27017' ],
+        database: TEST_DB,
+        username: 'root-user',
+        password: 'password'
+      )
+    end
 
-      it 'creates a query wire protocol message with correct specs' do
-        allow_any_instance_of(Mongo::ServerPreference::Primary).to receive(:server) do
-          primary_server
-        end
 
-        expect(Mongo::Protocol::Query).to receive(:new) do |db, coll, sel, options|
-          expect(db).to eq(db_name)
-          expect(coll).to eq(Mongo::Database::COMMAND)
-          expect(sel).to eq(selector)
-          expect(options).to eq(opts)
-        end
-        op.execute(primary_context)
+    let(:server) do
+      client.cluster.servers.first
+    end
+
+    before do
+      # @todo: Replace with condition variable
+      client.cluster.scan!
+    end
+
+    context 'when the command succeeds' do
+
+      let(:response) do
+        op.execute(server.context)
       end
 
-      it 'sets the limit to -1' do
-        allow_any_instance_of(Mongo::ServerPreference::Primary).to receive(:server) do
-          primary_server
-        end
-
-        expect(Mongo::Protocol::Query).to receive(:new) do |db, coll, sel, options|
-          expect(options[:limit]).to eq(-1)
-        end
-        op.execute(primary_context)
-
+      it 'returns the reponse' do
+        expect(response).to be_ok
       end
     end
 
-    context 'connection' do
+    context 'when the command fails' do
 
-      it 'dispatches the message on the connection' do
-        allow_any_instance_of(Mongo::ServerPreference::Primary).to receive(:server) do
-          primary_server
-        end
+      let(:selector) do
+        { notacommand: 1 }
+      end
 
-        expect(connection).to receive(:dispatch)
-        op.execute(primary_context)
+      it 'raises an exception' do
+        expect {
+          op.execute(server.context)
+        }.to raise_error(Mongo::Operation::Write::Failure)
       end
     end
 
-    context 'rerouting' do
+    context 'when the command cannot run on a secondary' do
 
-      context 'when the command is not allowed on a secondary and server is secondary' do
-        let(:selector) { { :replSetFreeze => 1 } }
+      context 'when the server is a secondary' do
 
-        it 'reroutes the operation to the primary' do
-          allow_any_instance_of(Mongo::ServerPreference::Primary).to receive(:server) do
-            primary_server
-          end
-          expect(primary_context).to receive(:with_connection)
-          op.execute(secondary_context)
-        end
-      end
-
-      context 'when the server is primary' do
-        let(:selector) { { :ismaster => 1 } }
-
-        it 'sends the operation to the primary' do
-          allow_any_instance_of(Mongo::ServerPreference::Primary).to receive(:server) do
-            primary_server
-          end
-          expect(primary_context).to receive(:with_connection)
-          op.execute(primary_context)
-        end
+        pending 'it re-routes to the primary'
       end
     end
   end

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'mongo/operation/write/insert/response'
+
 module Mongo
   module Operation
     module Write
@@ -67,18 +69,16 @@ module Mongo
           unless context.primary? || context.standalone?
             raise Exception, "Must use primary server"
           end
-          # @todo: change wire version to constant
-          if context.max_wire_version >= 2
+          if context.write_command_enabled?
             op = WriteCommand::Insert.new(spec)
-            op.execute(context)
+            Response.new(op.execute(context)).verify!
           else
             documents.each do |d|
               context.with_connection do |connection|
-                connection.dispatch([ message(d), gle ].compact)
+                Response.new(connection.dispatch([ message(d), gle ].compact)).verify!
               end
             end
-            # @todo: Durran: Need to return the response of the dispatch here,
-            # not the documents that were passed in.
+            Response.new(nil, documents.size)
           end
         end
 
@@ -115,15 +115,6 @@ module Mongo
           @spec[:documents] = original.spec[:documents].dup
         end
 
-        # The write concern to use for this operation.
-        #
-        # @return [ Mongo::WriteConcern::Mode ] The write concern.
-        #
-        # @since 2.0.0
-        def write_concern
-          @spec[:write_concern]
-        end
-
         # The documents to insert.
         #
         # @return [ Array ] The documents.
@@ -138,10 +129,9 @@ module Mongo
         # @return [ Mongo::Protocol::Insert ] Wire protocol message.
         #
         # @since 2.0.0
-        def message(insert_spec)
-          document = [ insert_spec[:document] ]
-          insert_spec = insert_spec[:continue_on_error] == 0 ? {} : { :flags => [:continue_on_error] }
-          Protocol::Insert.new(db_name, coll_name, document, insert_spec)
+        def message(document)
+          insert_spec = options[:continue_on_error] == 0 ? {} : { :flags => [:continue_on_error] }
+          Protocol::Insert.new(db_name, coll_name, [ document ], insert_spec)
         end
       end
     end

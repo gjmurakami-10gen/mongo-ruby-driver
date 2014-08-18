@@ -17,35 +17,33 @@ module Mongo
     module Write
       module WriteCommand
 
-        # A MongoDB insert write command operation.
+        # A MongoDB drop index write command operation.
         # Supported in server versions >= 2.5.5
         #
         # @example
-        #   include Mongo
-        #   include Operation
-        #   Write::WriteCommand::Insert.new({ :documents     => [{ :foo => 1 }],
-        #                                     :db_name       => 'test',
-        #                                     :coll_name     => 'test_coll',
-        #                                     :write_concern => write_concern,
-        #                                     :ordered       => true
-        #                                   })
+        #   Write::WriteCommand::DropIndex.new({
+        #     :index      => { :foo => 1 },
+        #     :db_name    => 'test',
+        #     :coll_name  => 'test_coll',
+        #     :index_name => 'foo_1'
+        #   })
+
         # @since 2.0.0
-        class Insert
+        class DropIndex
           include Executable
           include Writable
 
           private
 
-          # The query selector for this insert command operation.
+          # The query selector for this drop index command operation.
           #
           # @return [ Hash ] The selector describing this insert operation.
           #
           # @since 2.0.0
           def selector
-            { :insert        => coll_name,
-              :documents     => @spec[:documents],
-              :write_concern => write_concern.options,
-              :ordered       => ordered?
+            {
+              :deleteIndexes => coll_name,
+              :index => index_name
             }
           end
         end

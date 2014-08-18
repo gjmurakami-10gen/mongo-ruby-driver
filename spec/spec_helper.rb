@@ -46,35 +46,50 @@ RSpec.configure do |config|
 
   config.before(:suite) do
     admin_client = Mongo::Client.new([ '127.0.0.1:27017' ], database: 'admin')
-    users = admin_client['system.users']
+    test_client = Mongo::Client.new([ '127.0.0.1:27017' ], database: TEST_DB)
 
     # @todo: Need to replace with condition value.
     admin_client.cluster.scan!
+    test_client.cluster.scan!
 
     begin
-      # Create the admin user for the tests on 2.7 and higher.
-      p admin_client.command(
+      # Create the admin user for the tests on 2.6 and higher.
+      admin_client.command(
         :createUser => ROOT_USER.name,
         :pwd => ROOT_USER.hashed_password,
-        :roles => [ 'root' ]
+        :roles => [ 'root', 'userAdminAnyDatabase' ]
       )
     rescue; end
-
     begin
-      # If 2.7 nd higher failed, use the legacy user creation.
-      p users.insert({ user: ROOT_USER.name, pwd: ROOT_USER.hashed_password })
+      # If 2.6 and higher failed, use the legacy user creation.
+      test_client['system.users'].insert({
+        user: ROOT_USER.name,
+        pwd: ROOT_USER.hashed_password,
+        roles: [ 'readWrite' ]
+      })
     rescue; end
   end
 end
 
-TEST_DB       = 'ruby-driver'
-TEST_COLL     = 'test'
-TEST_SET      = 'ruby-driver-rs'
-TEST_USER     = 'test-user'
-TEST_PASSWORD = 'password'
-COVERAGE_MIN  = 90
+TEST_DB         = 'ruby-driver'
+TEST_COLL       = 'test'
+TEST_SET        = 'ruby-driver-rs'
+TEST_USER       = 'test-user'
+TEST_PASSWORD   = 'password'
+COVERAGE_MIN    = 90
 
 ROOT_USER = Mongo::Auth::User.new('admin', 'root-user', 'password')
+
+def write_command_enabled?
+  @client ||= initialize_scanned_client!
+  @write_command_enabled = @client.cluster.servers.first.write_command_enabled?
+end
+
+def initialize_scanned_client!
+  client = Mongo::Client.new([ '127.0.0.1:27017' ], database: TEST_DB)
+  client.cluster.scan!
+  client
+end
 
 # require all shared examples
 Dir['./spec/support/shared/*.rb'].sort.each { |file| require file }

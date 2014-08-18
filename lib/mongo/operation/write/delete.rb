@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'mongo/operation/write/delete/response'
+
 module Mongo
-
   module Operation
-
     module Write
 
       # A MongoDB delete operation.
@@ -70,18 +70,19 @@ module Mongo
         #
         # @since 2.0.0
         def execute(context)
-          raise Exception, "Must use primary server" unless context.primary?
-          # @todo: change wire version to constant
-          if context.max_wire_version >= 2
+          unless context.primary? || context.standalone?
+            raise Exception, "Must use primary server"
+          end
+          if context.write_command_enabled?
             op = WriteCommand::Delete.new(spec)
-            op.execute(context)
+            Response.new(op.execute(context)).verify!
           else
-            deletes.each do |d|
+            Response.new(nil, deletes.reduce(0) do |count, d|
               context.with_connection do |connection|
-                gle = write_concern.get_last_error
-                connection.dispatch([message(d), gle].compact)
+                response = Response.new(connection.dispatch([ message(d), gle ].compact)).verify!
+                count + response.n
               end
-            end
+            end)
           end
         end
 
@@ -118,15 +119,6 @@ module Mongo
           @spec[:deletes] = original.spec[:deletes].clone
         end
 
-        # The write concern to use for this operation.
-        #
-        # @return [ Mongo::WriteConcern::Mode ] The write concern.
-        #
-        # @since 2.0.0
-        def write_concern
-          @spec[:write_concern]
-        end
-
         # The delete documents.
         #
         # @return [ Array ] The delete documents.
@@ -143,7 +135,7 @@ module Mongo
         # @since 2.0.0
         def message(delete_spec)
           selector    = delete_spec[:q]
-          delete_opts = delete_spec[:limit] == 0 ? { } : { :flags => [:single_remove] }
+          delete_opts = (delete_spec[:limit] || 0) <= 0 ? {} : { :flags => [:single_remove] }
           Protocol::Delete.new(db_name, coll_name, selector, delete_opts)
         end
       end
