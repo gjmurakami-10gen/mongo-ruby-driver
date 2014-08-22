@@ -2,21 +2,8 @@ require 'spec_helper'
 
 describe Mongo::Indexable do
 
-  let(:client) do
-    Mongo::Client.new(
-      [ '127.0.0.1:27017' ],
-      database: TEST_DB,
-      username: ROOT_USER.name,
-      password: ROOT_USER.password
-    )
-  end
-
-  before do
-    client.cluster.scan!
-  end
-
   let(:indexable) do
-    client[TEST_COLL]
+    authorized_client[TEST_COLL]
   end
 
   describe '#drop_index' do
@@ -29,14 +16,31 @@ describe Mongo::Indexable do
       indexable.ensure_index(spec, unique: true)
     end
 
-    context 'when the index exists' do
+    context 'when providing an index spec' do
 
-      let(:result) do
-        indexable.drop_index(spec)
+      context 'when the index exists' do
+
+        let(:result) do
+          indexable.drop_index(spec)
+        end
+
+        it 'drops the index' do
+          expect(result).to be_ok
+        end
       end
+    end
 
-      it 'drops the index' do
-        expect(result).to be_ok
+    context 'when providing an index name' do
+
+      context 'when the index exists' do
+
+        let(:result) do
+          indexable.drop_index('another_-1')
+        end
+
+        it 'drops the index' do
+          expect(result).to be_ok
+        end
       end
     end
   end
@@ -103,6 +107,96 @@ describe Mongo::Indexable do
       it 'does not raise an exception', unless: write_command_enabled? do
         expect(indexable.ensure_index(spec, unique: false)).to be_ok
       end
+    end
+
+    context 'when providing an index name' do
+
+      let(:spec) do
+        { random: 1 }
+      end
+
+      let!(:result) do
+        indexable.ensure_index(spec, unique: true, name: 'random_name')
+      end
+
+      after do
+        indexable.drop_index('random_name')
+      end
+
+      it 'returns ok' do
+        expect(result).to be_ok
+      end
+
+      it 'defines the index with the provided name' do
+        expect(indexable.find_index('random_name')).to_not be_nil
+      end
+    end
+  end
+
+  describe '#find_index' do
+
+    let(:spec) do
+      { random: 1 }
+    end
+
+    let!(:result) do
+      indexable.ensure_index(spec, unique: true, name: 'random_name')
+    end
+
+    after do
+      indexable.drop_index('random_name')
+    end
+
+    context 'when providing a name' do
+
+      let(:index) do
+        indexable.find_index('random_name')
+      end
+
+      it 'returns the index' do
+        expect(index['name']).to eq('random_name')
+      end
+    end
+
+    context 'when providing a spec' do
+
+      let(:index) do
+        indexable.find_index(random: 1)
+      end
+
+      it 'returns the index' do
+        expect(index['name']).to eq('random_name')
+      end
+    end
+
+    context 'when the index does not exist' do
+
+      it 'returns nil' do
+        expect(indexable.find_index(other: 1)).to be_nil
+      end
+    end
+  end
+
+  describe '#indexes' do
+
+    let(:spec) do
+      { name: 1 }
+    end
+
+    before do
+      indexable.ensure_index(spec, unique: true)
+    end
+
+    after do
+      indexable.drop_index(spec)
+    end
+
+    let(:indexes) do
+      indexable.indexes
+    end
+
+    it 'returns all the indexes for the database' do
+      expect(indexes.documents.size).to eq(2)
     end
   end
 end

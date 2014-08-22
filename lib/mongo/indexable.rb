@@ -59,30 +59,18 @@ module Mongo
     # @since 2.0.0
     SYSTEM_INDEXES = 'system.indexes'.freeze
 
-    # An array of allowable index values.
-    #
-    # @since 2.0.0
-    INDEX_TYPES = {
-      'ASCENDING'   => ASCENDING,
-      'DESCENDING'  => DESCENDING,
-      'GEO2D'       => GEO2D,
-      'GEO2DSPHERE' => GEO2DSPHERE,
-      'GEOHAYSTACK' => GEOHAYSTACK,
-      'TEXT'        => TEXT,
-      'HASHED'      => HASHED
-    }.freeze
-
-    # Time indexes are kept in client cache until they are considered expired.
-    #
-    # @since 2.0.0
-    TIME_TO_EXPIRE = 300.freeze #5 minutes.
+    INDEX_KEY = 'key'.freeze
+    INDEX_NAME = 'name'.freeze
 
     # Drop an index by its specification.
     #
     # @example Drop the index by spec.
     #   indexable.drop_index(name: 1)
     #
-    # @param [ Hash ] spec The index to drop.
+    # @example Drop an index by its name.
+    #   indexable.drop_index('name_1')
+    #
+    # @param [ Hash, String ] spec The index spec or name to drop.
     #
     # @return [ Operation::Write::DropIndex::Response ] The response.
     #
@@ -92,7 +80,7 @@ module Mongo
       Operation::Write::DropIndex.new(
         db_name: database.name,
         coll_name: name,
-        index_name: index_name(spec)
+        index_name: spec.is_a?(String) ? spec : index_name(spec)
       ).execute(server.context)
     end
 
@@ -105,12 +93,7 @@ module Mongo
     #
     # @since 2.0.0
     def drop_indexes
-      server = server_preference.primary(cluster.servers).first
-      Operation::Write::DropIndex.new(
-        db_name: database.name,
-        coll_name: name,
-        index_name: '*'
-      ).execute(server.context)
+      drop_index('*')
     end
 
     # Calls create_index and sets a flag not to do so again for another X minutes.
@@ -145,8 +128,44 @@ module Mongo
         index: spec,
         db_name: database.name,
         coll_name: name,
-        index_name: index_name(spec),
+        index_name: options[:name] || index_name(spec),
         opts: options
+      ).execute(server.context)
+    end
+
+    # Convenience method for getting index information by a specific name or
+    # spec.
+    #
+    # @example Get index information by name.
+    #   indexable.find_index('name_1')
+    #
+    # @example Get index information by spec.
+    #   indexable.find_index(name: 1)
+    #
+    # @param [ Hash, String ] spec The index name or spec.
+    #
+    # @return [ Hash ] The index information.
+    #
+    # @since 2.0.0
+    def find_index(spec)
+      indexes.documents.find do |index|
+        (index[INDEX_NAME] == spec) || (index[INDEX_KEY] == normalize_keys(spec))
+      end
+    end
+
+    # Get all the indexes for the collection.
+    #
+    # @example Get all the indexes.
+    #   indexable.indexes
+    #
+    # @return [ Array<Hash> ] All the collection's indexes.
+    #
+    # @since 2.0.0
+    def indexes
+      server = server_preference.select_servers(cluster.servers).first
+      Operation::Read::Indexes.new(
+        db_name: database.name,
+        coll_name: name
       ).execute(server.context)
     end
 
@@ -154,6 +173,14 @@ module Mongo
 
     def index_name(spec)
       spec.to_a.join('_')
+    end
+
+    def normalize_keys(spec)
+      return false if spec.is_a?(String)
+      spec.reduce({}) do |normalized, (key, value)|
+        normalized[key.to_s] = value
+        normalized
+      end
     end
   end
 end

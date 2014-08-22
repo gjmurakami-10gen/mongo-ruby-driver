@@ -30,7 +30,6 @@ module Mongo
         #
         # @example
         #   Write::DropIndex.new({
-        #     :index         => { :name => 1, :age => -1 },
         #     :db_name       => 'test',
         #     :coll_name     => 'test_coll',
         #     :index_name    => 'name_1_age_-1'
@@ -62,7 +61,7 @@ module Mongo
           unless context.primary? || context.standalone?
             raise Exception, "Must use primary server to drop an index."
           end
-          Response.new(WriteCommand::DropIndex.new(spec).execute(context)).verify!
+          Response.new(Command::DropIndex.new(spec).execute(context)).verify!
         end
       end
     end
