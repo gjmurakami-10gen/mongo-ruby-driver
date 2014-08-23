@@ -62,18 +62,18 @@ describe Mongo::Orchestration::Cluster, :orchestration => true do
   let(:service) { Mongo::Orchestration::Service.new }
   let(:cluster) { service.configure(standalone_config) }
 
-  it 'runs start, status and stop methods' do
-    cluster.stop # force stopped
+  it 'runs init, status, stop, start, restart and delete methods' do
+    cluster.delete # force deleted
 
-    cluster.start
+    cluster.init
     expect(cluster.message_summary).to match(%r{^PUT /hosts/standalone, options: {.*}, 200 OK, response JSON:})
     expect(cluster.object).to be
     expect(cluster.object['serverInfo']['ok']).to eq(1.0)
 
-    cluster.start # start for already started
+    cluster.init # init for already inited
     expect(cluster.message_summary).to match(%r{^GET /hosts/standalone, options: {}, 200 OK, response JSON:})
 
-    cluster.status # status for started
+    cluster.status # status for inited
     expect(cluster.message_summary).to match(%r{^GET /hosts/standalone, options: {}, 200 OK, response JSON:})
 
     uri = cluster.object['uri']
@@ -82,12 +82,21 @@ describe Mongo::Orchestration::Cluster, :orchestration => true do
     # add client connection when Ruby is ready for prime time
 
     cluster.stop
+    expect(cluster.message_summary).to match(%r{^POST /hosts/standalone, options: {:body=>\"{\\\"action\\\":\\\"stop\\\"}\"}, 200 OK})
+
+    cluster.start
+    expect(cluster.message_summary).to match(%r{^POST /hosts/standalone, options: {:body=>\"{\\\"action\\\":\\\"start\\\"}\"}, 200 OK})
+
+    cluster.restart
+    expect(cluster.message_summary).to match(%r{^POST /hosts/standalone, options: {:body=>\"{\\\"action\\\":\\\"restart\\\"}\"}, 200 OK})
+
+    cluster.delete
     expect(cluster.message_summary).to match(%r{^DELETE /hosts/standalone, options: {}, 204 No Content})
 
-    cluster.stop # stop for already stopped
+    cluster.delete # delete for already deleted
     expect(cluster.message_summary).to match(%r{GET /hosts/standalone, options: {}, 404 Not Found})
 
-    cluster.status # status for stopped
+    cluster.status # status for deleted
     expect(cluster.message_summary).to match(%r{GET /hosts/standalone, options: {}, 404 Not Found})
   end
 end
@@ -143,11 +152,11 @@ describe Mongo::Orchestration::ReplicaSet, :orchestration => true do
   before(:all) do
     @service = Mongo::Orchestration::Service.new
     @cluster = @service.configure(replicaset_config)
-    @cluster.start
+    @cluster.init
   end
 
   after(:all) do
-    #@cluster.stop
+    @cluster.delete
   end
 
   it 'provides primary' do
@@ -218,11 +227,11 @@ describe Mongo::Orchestration::ShardedCluster, :orchestration => true do
   before(:all) do
     @service = Mongo::Orchestration::Service.new
     @cluster = @service.configure(sharded_configuration)
-    @cluster.start
+    @cluster.init
   end
 
   after(:all) do
-    @cluster.stop
+    @cluster.delete
   end
 
   it 'provides single-server shards' do
@@ -302,11 +311,11 @@ describe Mongo::Orchestration::ShardedCluster, :orchestration => true do
   before(:all) do
     @service = Mongo::Orchestration::Service.new
     @cluster = @service.configure(sharded_rs_configuration)
-    @cluster.start
+    @cluster.init
   end
 
   after(:all) do
-    @cluster.stop
+    @cluster.delete
   end
 
   it 'provides rs shards' do

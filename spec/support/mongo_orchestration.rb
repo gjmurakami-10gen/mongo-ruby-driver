@@ -128,21 +128,24 @@ module Mongo
         get
       end
 
-      def start
-        unless status.ok
-          put(nil, {body: @request_content})
-          if ok
-            @object = @response.parsed_response
-          else
-            raise "#{self.class.name}##{__method__} #{message_summary}"
-          end
+      def create
+        put(nil, {body: @request_content})
+        if ok
+          @object = @response.parsed_response
+        else
+          raise "#{self.class.name}##{__method__} #{message_summary}"
         end
         self
       end
 
-      def stop
+      def init
+        create unless status.ok
+        self
+      end
+
+      def delete
         if status.ok
-          delete
+          super
           raise "#{self.class.name}##{__method__} #{message_summary}" unless @response.code == 204
           #@object = nil
         end
@@ -163,7 +166,17 @@ module Mongo
     end
 
     class Server < Cluster
+      def start
+        post(nil, {body: {action: __method__}})
+      end
 
+      def stop
+        post(nil, {body: {action: __method__}})
+      end
+
+      def restart
+        post(nil, {body: {action: __method__}})
+      end
     end
 
     class ReplicaSet < Cluster
@@ -229,7 +242,7 @@ module Mongo
         end
         base_path = [@base_path, orchestration, id].join('/')
         cluster = klass.new(base_path, request_content)
-        cluster.start
+        cluster.init
       end
     end
   end
