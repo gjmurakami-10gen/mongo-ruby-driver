@@ -62,8 +62,8 @@ describe Mongo::Orchestration::Cluster, :orchestration => true do
   let(:service) { Mongo::Orchestration::Service.new }
   let(:cluster) { service.configure(standalone_config) }
 
-  it 'runs init, status, stop, start, restart and delete methods' do
-    cluster.delete # force deleted
+  it 'runs init, status, stop, start, restart and destroy methods' do
+    cluster.destroy # force destroyed
 
     cluster.init
     expect(cluster.message_summary).to match(%r{^PUT /hosts/standalone, options: {.*}, 200 OK, response JSON:})
@@ -90,13 +90,13 @@ describe Mongo::Orchestration::Cluster, :orchestration => true do
     cluster.restart
     expect(cluster.message_summary).to match(%r{^POST /hosts/standalone, options: {:body=>\"{\\\"action\\\":\\\"restart\\\"}\"}, 200 OK})
 
-    cluster.delete
+    cluster.destroy
     expect(cluster.message_summary).to match(%r{^DELETE /hosts/standalone, options: {}, 204 No Content})
 
-    cluster.delete # delete for already deleted
+    cluster.destroy # destroy for already destroyed
     expect(cluster.message_summary).to match(%r{GET /hosts/standalone, options: {}, 404 Not Found})
 
-    cluster.status # status for deleted
+    cluster.status # status for destroyed
     expect(cluster.message_summary).to match(%r{GET /hosts/standalone, options: {}, 404 Not Found})
   end
 end
@@ -156,7 +156,7 @@ describe Mongo::Orchestration::ReplicaSet, :orchestration => true do
   end
 
   after(:all) do
-    @cluster.delete
+    @cluster.destroy
   end
 
   it 'provides primary' do
@@ -231,7 +231,7 @@ describe Mongo::Orchestration::ShardedCluster, :orchestration => true do
   end
 
   after(:all) do
-    @cluster.delete
+    @cluster.destroy
   end
 
   it 'provides single-server shards' do
@@ -315,7 +315,7 @@ describe Mongo::Orchestration::ShardedCluster, :orchestration => true do
   end
 
   after(:all) do
-    @cluster.delete
+    @cluster.destroy
   end
 
   it 'provides rs shards' do

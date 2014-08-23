@@ -143,9 +143,9 @@ module Mongo
         self
       end
 
-      def delete
+      def destroy
         if status.ok
-          super
+          delete
           raise "#{self.class.name}##{__method__} #{message_summary}" unless @response.code == 204
           #@object = nil
         end
