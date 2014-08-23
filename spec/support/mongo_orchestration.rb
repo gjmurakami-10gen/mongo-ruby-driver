@@ -123,35 +123,6 @@ module Mongo
       end
     end
 
-    class Host < Resource
-      def status
-        get
-      end
-
-      def start
-        put_with_check(__method__)
-      end
-
-      def stop
-        put_with_check(__method__)
-      end
-
-      def restart
-        put_with_check(__method__)
-      end
-
-      def freeze
-        put_with_check(__method__)
-      end
-
-    private
-      def put_with_check(method)
-        put(method)
-        raise "#{self.class.name}##{method} #{message_summary}" unless ok
-        self
-      end
-    end
-
     class Cluster < Resource
       def status
         get
@@ -191,36 +162,34 @@ module Mongo
       end
     end
 
-    class Hosts < Cluster
-      def host
-        Host.new(['/hosts', @object['id']].join('/'))
-      end
+    class Server < Cluster
+
     end
 
-    class RS < Cluster
+    class ReplicaSet < Cluster
       def members
-        components('members', Host, '/hosts', 'host_id');
+        components('members', Server, '/hosts', 'host_id');
       end
 
       def primary
         sub_rsrc = sub_resource(Resource, 'primary')
-        return sub_rsrc.ok ? component(Host, '/hosts', sub_rsrc.object, 'host_id') : nil
+        return sub_rsrc.ok ? component(Server, '/hosts', sub_rsrc.object, 'host_id') : nil
       end
 
       def secondaries
-        components('secondaries', Host, '/hosts', 'host_id');
+        components('secondaries', Server, '/hosts', 'host_id');
       end
 
       def arbiters
-        components('arbiters', Host, '/hosts', 'host_id');
+        components('arbiters', Server, '/hosts', 'host_id');
       end
 
       def hidden
-        components('hidden', Host, '/hosts', 'host_id');
+        components('hidden', Server, '/hosts', 'host_id');
       end
     end
 
-    class SH < Cluster
+    class ShardedCluster < Cluster
       def shards
         members = sub_resource(Resource, 'members')
         members.ok ? members.object.collect{|member| shard(member)} : []
@@ -231,23 +200,23 @@ module Mongo
       end
 
       def configservers # JSON configuration response uses configsvrs # TODO - unify configservers / configsvrs
-        components(__method__, Host, '/hosts', 'id')
+        components(__method__, Server, '/hosts', 'id')
       end
 
       def routers
-        components(__method__, Host, '/hosts', 'id')
+        components(__method__, Server, '/hosts', 'id')
       end
 
     private
       def shard(object)
-        return RS.new("/rs/#{object['_id']}") if object.has_key?('isReplicaSet')
-        return Hosts.new("/hosts/#{object['_id']}") if object.has_key?('isHost')
+        return ReplicaSet.new("/rs/#{object['_id']}") if object.has_key?('isReplicaSet')
+        return Server.new("/hosts/#{object['_id']}") if object.has_key?('isHost')
         nil
       end
     end
 
     class Service
-      ORCHESTRATION_CLASS = { 'hosts' => Hosts, 'rs' => RS, 'sh' => SH }
+      ORCHESTRATION_CLASS = { 'hosts' => Server, 'rs' => ReplicaSet, 'sh' => ShardedCluster }
 
       def configure(config)
         orchestration = config[:orchestration]
