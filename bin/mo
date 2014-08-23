@@ -32,7 +32,7 @@ $DBPATH = $WORKSPACE
 configurations = [
     {
         orchestration: "hosts",
-        post_data: {
+        request_content: {
             id: "standalone",
             name: "mongod",
             procParams: {
@@ -46,7 +46,7 @@ configurations = [
     },
     {
         orchestration: "rs",
-        post_data: {
+        request_content: {
             id: "repl0",
             members: [
                 {
@@ -99,7 +99,7 @@ configurations = [
     },
     {
         orchestration: "sh",
-        post_data: {
+        request_content: {
             id: "shard_cluster_1",
             configsvrs: [
                 {
@@ -139,7 +139,7 @@ configurations = [
     }
 ]
 
-config = configurations.find{|config| config[:post_data][:id] == id}
+config = configurations.find{|config| config[:request_content][:id] == id}
 raise "id:#{id.inspect} not found" unless config
 p config if $VERBOSE
 

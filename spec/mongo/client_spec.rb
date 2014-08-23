@@ -483,7 +483,7 @@ describe Mongo::Client do
     let(:configuration) {
       {
           orchestration: "hosts",
-          post_data: {
+          request_content: {
               id: "single",
               name: "mongod",
               procParams: {

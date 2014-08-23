@@ -14,6 +14,7 @@
 
 require 'mongo'
 require 'httparty'
+require 'pp'
 
 module Mongo
   module Orchestration
@@ -23,7 +24,7 @@ module Mongo
 
       DEFAULT_BASE_URI = 'http://localhost:8889'
       base_uri (ENV['MONGO_ORCHESTRATION'] || DEFAULT_BASE_URI)
-      attr_reader :base_path, :object, :config, :method, :abs_path, :response
+      attr_reader :base_path, :method, :abs_path, :response
 
       @@debug = false
 
@@ -35,16 +36,15 @@ module Mongo
         @@debug = value
       end
 
-      def initialize(base_path = '', object = nil, config = nil)
+      def initialize(base_path = '')
         @base_path = base_path
-        @object = object
-        @config = config
       end
 
       def http_request(method, path = nil, options = {})
         @method = method
         @abs_path = [@base_path, path].compact.join('/')
         @options = options
+        @options[:body] = @options[:body].to_json if @options.has_key?(:body)
         @response = self.class.send(@method, @abs_path, @options)
         puts message_summary if debug
         self
@@ -66,6 +66,10 @@ module Mongo
         http_request(__method__, path, options)
       end
 
+      def ok
+        (@response.code/100) == 2
+      end
+
       def humanized_http_response_class_name
         @response.response.class.name.split('::').last.sub(/^HTTP/, '').gsub(/([a-z\d])([A-Z])/, '\1 \2')
       end
@@ -82,7 +86,27 @@ module Mongo
       end
     end
 
-    class Service < Base
+    class Resource < Base
+      attr_reader :request_content, :object
+
+      def initialize(base_path = '', request_content = nil)
+        super(base_path)
+        @request_content = request_content
+        get
+      end
+
+      def get
+        super
+        @object = @response.parsed_response if ok
+        self
+      end
+
+      def sub_resource(sub_class, path)
+        sub_class.new([@base_path, path].join('/'))
+      end
+    end
+
+    class Service < Resource
       VERSION_REQUIRED = "0.9"
 
       def initialize(base_path = '')
@@ -99,15 +123,9 @@ module Mongo
       end
     end
 
-    class Host < Base
-      def initialize(base_path = '', object = nil)
-        super
-      end
-
+    class Host < Resource
       def status
         get
-        @object = @response.parsed_response if @response.code == 200
-        self
       end
 
       def start
@@ -129,43 +147,31 @@ module Mongo
     private
       def put_with_check(method)
         put(method)
-        raise "#{self.class.name}##{method} #{message_summary}" unless @response.code == 200
+        raise "#{self.class.name}##{method} #{message_summary}" unless ok
         self
       end
     end
 
-    class Cluster < Base
-      def initialize(base_path = '', object = nil, config = nil)
-        super
-        @post_data = @config[:post_data]
-        @id = @post_data[:id]
-      end
-
+    class Cluster < Resource
       def status
-        get(@id)
-        @object = @response.parsed_response if @response.code == 200
-        self
+        get
       end
 
       def start
-        status
-        if @response.code != 200
-          post(nil, {body: @post_data.to_json})
-          if @response.code == 200
+        unless status.ok
+          put(nil, {body: @request_content})
+          if ok
             @object = @response.parsed_response
           else
             raise "#{self.class.name}##{__method__} #{message_summary}"
           end
-        else
-          #put(@id)
         end
         self
       end
 
       def stop
-        status
-        if @response.code == 200
-          delete(@id)
+        if status.ok
+          delete
           raise "#{self.class.name}##{__method__} #{message_summary}" unless @response.code == 204
           #@object = nil
         end
@@ -173,74 +179,70 @@ module Mongo
       end
 
     private
-      def host(resource, host_data, id_key)
-        base_path = [@base_path, @id, resource, host_data[id_key]].join('/')
-        Host.new(base_path, host_data)
+      def component(klass, path, object, id_key)
+        base_path = ((path =~ %r{^/}) ? '' : "#{@base_path}/") + "#{path}/#{object[id_key]}"
+        klass.new(base_path)
       end
 
-      def hosts(get_resource, resource, id_key)
-        base_path = [@base_path, @id, get_resource].join('/')
-        response = self.class.get(base_path)
-        hosts_data = (response.code == 200) ? response.parsed_response : []
-        [hosts_data].flatten(1).collect{|host_data| host(resource, host_data, id_key)}
+      def components(get_resource, klass, resource, id_key)
+        sub_rsrc = sub_resource(Resource, get_resource)
+        hosts_data = sub_rsrc.ok ? sub_rsrc.object : []
+        [hosts_data].flatten(1).collect{|host_data| component(klass, resource, host_data, id_key)}
       end
     end
 
     class Hosts < Cluster
-      def initialize(base_path = '', object = nil, config = nil)
-        super
-      end
-
       def host
-        base_path = [@base_path, @object['id']].join('/')
-        Host.new(base_path, @object)
+        Host.new(['/hosts', @object['id']].join('/'))
       end
     end
 
     class RS < Cluster
-      def initialize(base_path = '', object = nil, config = nil)
-        super
-      end
-
       def members
-        hosts('members', 'members', '_id'); # host_id
+        components('members', Host, '/hosts', 'host_id');
       end
 
       def primary
-        #hosts('primary', 'members', '_id').first
-        base_path = [@base_path, @id, 'primary'].join('/')
-        response = self.class.get(base_path)
-        return (response.code == 200) ? Host.new(base_path, response.parsed_response) : nil
+        sub_rsrc = sub_resource(Resource, 'primary')
+        return sub_rsrc.ok ? component(Host, '/hosts', sub_rsrc.object, 'host_id') : nil
       end
 
       def secondaries
-        hosts('secondaries', 'members', '_id'); # 'hosts', 'host_id'
+        components('secondaries', Host, '/hosts', 'host_id');
       end
 
       def arbiters
-        hosts('arbiters', 'members', '_id'); # 'hosts', 'host_id'
+        components('arbiters', Host, '/hosts', 'host_id');
       end
 
       def hidden
-        hosts('hidden', 'members', '_id'); # 'hosts', 'host_id'
+        components('hidden', Host, '/hosts', 'host_id');
       end
     end
 
     class SH < Cluster
-      def initialize(base_path = '', object = nil, config = nil)
-        super
+      def shards
+        members = sub_resource(Resource, 'members')
+        members.ok ? members.object.collect{|member| shard(member)} : []
       end
 
       def members
-        hosts(__method__, 'members', 'id')
+        components(__method__, Resource, 'members', 'id')
       end
 
       def configservers # JSON configuration response uses configsvrs # TODO - unify configservers / configsvrs
-        hosts(__method__, 'members', 'id') # 'hosts', 'host_id'
+        components(__method__, Host, '/hosts', 'id')
       end
 
       def routers
-        hosts(__method__, 'members', 'id') # 'hosts', 'host_id'
+        components(__method__, Host, '/hosts', 'id')
+      end
+
+    private
+      def shard(object)
+        return RS.new("/rs/#{object['_id']}") if object.has_key?('isReplicaSet')
+        return Hosts.new("/hosts/#{object['_id']}") if object.has_key?('isHost')
+        nil
       end
     end
 
@@ -249,8 +251,16 @@ module Mongo
 
       def configure(config)
         orchestration = config[:orchestration]
-        base_path = [@base_path, orchestration].join('/')
-        ORCHESTRATION_CLASS[orchestration].new(base_path, nil, config)
+        request_content = config[:request_content]
+        klass = ORCHESTRATION_CLASS[orchestration]
+        id = request_content[:id]
+        unless id
+          http_request = Base.new.post(orchestration, {:body => request_content})
+          id = http_request.response.parsed_response.id
+        end
+        base_path = [@base_path, orchestration, id].join('/')
+        cluster = klass.new(base_path, request_content)
+        cluster.start
       end
     end
   end
