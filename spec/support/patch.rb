@@ -1,5 +1,6 @@
 module Mongo
   class Client
+
     def initialize(addresses_or_uri, options = {})
       if addresses_or_uri.is_a?(::String)
         create_from_uri(addresses_or_uri, options)
@@ -26,9 +27,19 @@ module Mongo
       @options = options.merge(uri.client_options).freeze
       @database = Database.new(self, @options[:database])
     end
+
   end
 
+  class NoMaster < MongoError; end
+
   class Cluster
+
+    def next_primary
+      primary = client.server_preference.primary(servers).first
+      raise Mongo::NoMaster.new("no master") unless primary
+      primary
+    end
+
     def scan!
       @servers.each do |server|
         p server
@@ -42,16 +53,19 @@ module Mongo
         end
       end
     end
+
   end
 
   class Server
     class Monitor
+
       def ismaster
         start = Time.now
         begin
           result = connection.dispatch([ ISMASTER ]).documents[0]
-p __method__
-pp result
+          p self.class
+          p __method__
+          pp result
           return result, calculate_round_trip_time(start)
         rescue SystemCallError, IOError => e
           log(:debug, 'MONGODB', [ e.message ])
@@ -61,8 +75,26 @@ pp result
           # p e
           connection.disconnect!
           raise e
+        rescue Exception => ex
+          p self.class
+          p __method__
+          p "rescue Exception => ex"
+          p ex
+          raise ex
         end
       end
+
+    end
+
+    class Description
+
+      def secondary?  # TODO - remove when unneeded - diagnostic only
+        p self.class
+        p __method__
+        p config
+        !!config[SECONDARY] && !replica_set_name.nil?
+      end
+
     end
 
     def ping_time
@@ -70,9 +102,27 @@ pp result
     end
   end
 
+  class NoReadPreference < MongoError; end
 
   class Collection
     class View
+
+      module Iterable
+
+        def each
+          server = read.select_servers(cluster.servers).first
+          p self.class
+          p __method__
+          p server
+          raise Mongo::NoReadPreference.new("No replica set member available for query with read preference matching mode #{read.name.to_s}") unless server
+          cursor = Cursor.new(view, send_initial_query(server), server).to_enum
+          cursor.each do |doc|
+            yield doc
+          end if block_given?
+          cursor
+        end
+
+      end
 
       module Readable
 

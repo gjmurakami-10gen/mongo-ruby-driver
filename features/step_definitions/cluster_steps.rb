@@ -89,15 +89,19 @@ def rescue_error_and_retry(max_retries = 30)
   retries = 0
   begin
     yield
-  rescue Mongo::SocketError, Errno::ECONNREFUSED => ex
+  rescue Mongo::NoReadPreference, Mongo::NoMaster, Mongo::Operation::Write::Failure, Mongo::SocketError, Errno::ECONNREFUSED => ex
     p __method__
+    p "rescue Mongo::NoReadPreference, Mongo::NoMaster, Mongo::Operation::Write::Failure, Mongo::SocketError, Errno::ECONNREFUSED => ex"
+    p ex
     @client.cluster.scan!
     retries += 1
     raise ex if retries > max_retries
+    system("gps")
     sleep(2)
     retry
   rescue Exception => ex
     p __method__
+    p "rescue Exception => ex"
     p ex
     raise ex
   end
@@ -137,7 +141,7 @@ def data_members(which = [:primary, :secondaries])
   topology_members = @secondaries.collect{|secondary| [secondary, :secondary]} if which.include?(:secondaries)
   topology_members << [@primary, :primary] if which.include?(:primary)
   client_members = topology_members.collect do |resource, member_type|
-    client = Mongo::Client.new(resource.object['mongodb_uri'])
+    client = Mongo::Client.new(resource.object['mongodb_uri'] + '/' + TEST_DB)
     client.cluster.scan!
     [resource.object['uri'], {client: client, resource: resource, member_type: member_type}]
   end
@@ -251,7 +255,7 @@ end
 
 Given(/^a replica-set client with a seed from (?:a|the) (primary|secondary|arbiter)$/) do |member_type|
   seed = members_by_type(member_type).first.object['uri']
-  mongodb_uri = "mongodb://#{seed}/?replicaSet=#{@topology.object['id']}"
+  mongodb_uri = "mongodb://#{seed}/#{TEST_DB}?replicaSet=#{@topology.object['id']}"
   @client = Mongo::Client.new(mongodb_uri)
   @client.cluster.scan!
 end
