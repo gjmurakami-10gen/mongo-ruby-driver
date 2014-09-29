@@ -18,7 +18,9 @@ end
 
 group :development, :testing do
   gem 'json', :platforms => [ :jruby ]
+  gem 'httparty'
   gem 'rspec', '~> 3.0'
+  gem 'cucumber'
   gem 'mime-types', '~> 1.25'
 
   platforms :ruby_19, :ruby_20, :ruby_21, :jruby do
