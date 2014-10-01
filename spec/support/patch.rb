@@ -1,3 +1,5 @@
+$debug = false # true #
+
 module Mongo
   class Client
 
@@ -41,19 +43,50 @@ module Mongo
     end
 
     def scan!
+      p "***** #{self.class} *****" if $debug
+      p __method__ if $debug
+      p self if $debug
+      p "***** addresses:" if $debug
+      p addresses if $debug
+      if @servers.empty?
+        @servers = @addresses.map do |address|
+          Server.new(address, @options).tap do |server|
+            subscribe_to(server, Event::SERVER_ADDED, Event::ServerAdded.new(self))
+            subscribe_to(server, Event::SERVER_REMOVED, Event::ServerRemoved.new(self))
+          end
+        end
+      end
+      p @servers if $debug
+      system("gps") if $debug
       @servers.each do |server|
-        p server
+        p self.class if $debug
+        p __method__ if $debug
+        p server if $debug
+        p server.description if $debug
         begin
           server.check!
-        rescue Mongo::SocketError => ex
-        rescue Exception => ex
+        rescue Exception => e
           p self.class
           p __method__
-          p ex
+          p e
         end
       end
     end
 
+    def remove(address)
+      removed_servers = @servers.reject!{ |server| server.address.seed == address }
+      removed_servers.each{ |server| server.disconnect! } if removed_servers
+    end
+
+    module Mode
+      class Standalone
+
+        def self.servers(servers, name = nil)
+          servers.select{ |server| server.standalone? }
+        end
+
+      end
+    end
   end
 
   class Server
@@ -63,38 +96,49 @@ module Mongo
         start = Time.now
         begin
           result = connection.dispatch([ ISMASTER ]).documents[0]
-          p self.class
-          p __method__
-          pp result
+          pp result if $debug
           return result, calculate_round_trip_time(start)
-        rescue SystemCallError, IOError => e
-          log(:debug, 'MONGODB', [ e.message ])
-          return {}, calculate_round_trip_time(start)
-        rescue Mongo::SocketError => e
-          # p __method__
-          # p e
+        rescue Mongo::SocketError, Errno::ECONNREFUSED, SystemCallError, IOError => e
+          p self.class if $debug
+          p __method__ if $debug
           connection.disconnect!
-          raise e
-        rescue Exception => ex
+          #log(:debug, 'MONGODB', [ e.message ])
+          return {}, calculate_round_trip_time(start)
+        rescue Exception => e
           p self.class
           p __method__
-          p "rescue Exception => ex"
-          p ex
-          raise ex
+          p "rescue Exception => e"
+          p e
+          raise e
         end
       end
 
     end
 
     class Description
+      module Inspection
+        class ServerRemoved
 
-      def secondary?  # TODO - remove when unneeded - diagnostic only
-        p self.class
-        p __method__
-        p config
-        !!config[SECONDARY] && !replica_set_name.nil?
+          def self.run(description, updated)
+            p "***** self.run *****" if $debug
+            p self.class if $debug
+            p __method__ if $debug
+            if updated.config.empty?
+              p "***** publish *****" if $debug
+              p description if $debug
+              p updated.server.address.seed if $debug
+              # currently there's an issue with removing a server here
+              #description.server.publish(Event::SERVER_REMOVED, updated.server.address.seed)
+            end
+            description.hosts.each do |host|
+              if updated.primary? && !updated.hosts.include?(host)
+                description.server.publish(Event::SERVER_REMOVED, host)
+              end
+            end
+          end
+
+        end
       end
-
     end
 
     def ping_time
@@ -104,22 +148,62 @@ module Mongo
 
   class NoReadPreference < MongoError; end
 
+  class Database
+
+    def command(operation)
+      p self.class if $debug
+      p __method__ if $debug
+      p client.cluster.servers if $debug
+      server = client.server_preference.select_servers(cluster.servers).first
+      p client.server_preference if $debug
+      raise Mongo::NoReadPreference.new("No replica set member available for query with read preference matching mode #{client.server_preference.name.to_s}") unless server
+      Operation::Command.new({
+        :selector => operation,
+        :db_name => name,
+        :options => { :limit => -1 }
+      }).execute(server.context)
+    end
+
+  end
+
   class Collection
     class View
 
       module Iterable
 
         def each
-          server = read.select_servers(cluster.servers).first
-          p self.class
-          p __method__
-          p server
-          raise Mongo::NoReadPreference.new("No replica set member available for query with read preference matching mode #{read.name.to_s}") unless server
-          cursor = Cursor.new(view, send_initial_query(server), server).to_enum
-          cursor.each do |doc|
-            yield doc
-          end if block_given?
-          cursor
+          tries = 0
+          begin
+            p self.class if $debug
+            p __method__ if $debug
+            servers = cluster.servers
+            p servers if $debug
+            p read if $debug
+            p read.select_servers(cluster.servers) if $debug
+            server = read.select_servers(cluster.servers).first
+            p server if $debug
+            raise Mongo::NoReadPreference.new("No replica set member available for query with read preference matching mode #{read.name.to_s}") unless server
+            cursor = Cursor.new(view, send_initial_query(server), server).to_enum
+            cursor.each do |doc|
+              yield doc
+            end if block_given?
+            cursor
+          rescue Mongo::NoMaster, Mongo::NoReadPreference, Mongo::SocketError, Errno::ECONNREFUSED => e
+            p __method__ if $debug
+            p e if $debug
+            server.disconnect! if server
+            tries += 1
+            raise e if tries > 3
+            sleep(2)
+            system("gps") if $debug
+            collection.cluster.scan!
+            retry
+          rescue Exception => e
+            p __method__
+            p e
+            p "rescue Exception => e"
+            raise e
+          end
         end
 
       end
@@ -133,30 +217,38 @@ module Mongo
           view
         end
 
-        def get_one
+        def get_one # convenience, no bug
           limit(1).to_a.first
         end
 
       end
 
-      private
+    end
+  end
 
-      def send_initial_query(server)
-        tries = 0
-        begin
-          initial_query_op.execute(server.context)
-        rescue Mongo::SocketError, Errno::ECONNREFUSED => ex
-p __method__
-p ex
-          server.disconnect!
-          tries += 1
-          raise ex if tries > 3
-          sleep(2)
-          retry
-        end
+  class Connection
+
+    def dispatch(messages)
+      begin
+        write(messages)
+        messages.last.replyable? ? read : nil
+      rescue Mongo::SocketError => e
+        disconnect!
+        raise e
+      end
+    end
+
+  end
+
+  module Event
+    class ServerAdded
+      include Loggable
+
+      def handle(address)
+        log(:debug, 'MONGODB', [ "#{address} being added to the cluster." ])
+        cluster.add(address)
       end
 
     end
   end
-
 end

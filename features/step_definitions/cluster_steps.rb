@@ -78,9 +78,6 @@ public
 
 def find_one_ordinal(read_preference = {})
   view = @coll.find({"a" => @ordinal})
-  p __method__
-  p read_preference
-  p read_preference.empty?
   view = view.read(read_preference[:mode]) unless read_preference.empty?
   view.get_one
 end
@@ -90,13 +87,12 @@ def rescue_error_and_retry(max_retries = 30)
   begin
     yield
   rescue Mongo::NoReadPreference, Mongo::NoMaster, Mongo::Operation::Write::Failure, Mongo::SocketError, Errno::ECONNREFUSED => ex
-    p __method__
-    p "rescue Mongo::NoReadPreference, Mongo::NoMaster, Mongo::Operation::Write::Failure, Mongo::SocketError, Errno::ECONNREFUSED => ex"
-    p ex
-    @client.cluster.scan!
+    # p __method__
+    # p "rescue Mongo::NoReadPreference, Mongo::NoMaster, Mongo::Operation::Write::Failure, Mongo::SocketError, Errno::ECONNREFUSED => ex"
+    # p ex
     retries += 1
     raise ex if retries > max_retries
-    system("gps")
+    @client.cluster.scan!
     sleep(2)
     retry
   rescue Exception => ex
@@ -141,7 +137,7 @@ def data_members(which = [:primary, :secondaries])
   topology_members = @secondaries.collect{|secondary| [secondary, :secondary]} if which.include?(:secondaries)
   topology_members << [@primary, :primary] if which.include?(:primary)
   client_members = topology_members.collect do |resource, member_type|
-    client = Mongo::Client.new(resource.object['mongodb_uri'] + '/' + TEST_DB)
+    client = Mongo::Client.new(resource.object['mongodb_uri'] + '/admin', mode: :standalone)
     client.cluster.scan!
     [resource.object['uri'], {client: client, resource: resource, member_type: member_type}]
   end
@@ -155,7 +151,7 @@ end
 
 def get_server_status
   data_members_with_status = @data_members.each_pair.collect{|key, value|
-    server_status = value[:client]['admin'].command({serverStatus: 1})
+    server_status = value[:client].command({serverStatus: 1})
     #pp [value[:client].host_port, server_status]
     [key, value.dup.merge(server_status: server_status)]
   }
@@ -256,8 +252,11 @@ end
 Given(/^a replica-set client with a seed from (?:a|the) (primary|secondary|arbiter)$/) do |member_type|
   seed = members_by_type(member_type).first.object['uri']
   mongodb_uri = "mongodb://#{seed}/#{TEST_DB}?replicaSet=#{@topology.object['id']}"
-  @client = Mongo::Client.new(mongodb_uri)
+  @client = Mongo::Client.new(mongodb_uri, mode: :replica_set)
   @client.cluster.scan!
+  @admin = Mongo::Database.new(@client, 'admin')
+  @db = Mongo::Database.new(@client, TEST_DB)
+  @coll = Mongo::Collection.new(@db, TEST_COLL)
 end
 
 Given(/^some documents written to all data\-bearing members$/) do
@@ -465,6 +464,7 @@ When(/^I remove all documents from the collection$/) do
 end
 
 Then(/^the insert succeeds$/) do
+  pp @result.backtrace if @result.is_a?(Exception)
   expect(@result).to be_instance_of(Mongo::Operation::Result)
   expect(find_one_ordinal).not_to be_nil
   @ordinal += 1
@@ -499,6 +499,7 @@ Then(/^the result includes a (write|write concern) error$/) do |write_error_type
 end
 
 Then(/^the query succeeds$/) do
+  pp @result.backtrace if @result.is_a?(Exception)
   expect(@result).to be_instance_of(BSON::Document)
 end
 
