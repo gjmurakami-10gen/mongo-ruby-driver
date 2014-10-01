@@ -1,4 +1,5 @@
 $debug = false # true #
+$reroute = true
 
 module Mongo
   class Client
@@ -36,6 +37,22 @@ module Mongo
 
   class Cluster
 
+    def initialize(client, addresses, options = {})
+      p [self.class,__method__,__FILE__,__LINE__] if $debug
+      @client = client
+      @addresses = addresses
+      @options = options.freeze
+      @mode = Mode.get(options)
+      @servers = addresses.map do |address|
+        Server.new(address, options).tap do |server|
+          unless @mode == Mongo::Cluster::Mode::Standalone
+            subscribe_to(server, Event::SERVER_ADDED, Event::ServerAdded.new(self))
+            subscribe_to(server, Event::SERVER_REMOVED, Event::ServerRemoved.new(self))
+          end
+        end
+      end
+    end
+
     def next_primary
       primary = client.server_preference.primary(servers).first
       raise Mongo::NoMaster.new("no master") unless primary
@@ -44,31 +61,32 @@ module Mongo
 
     def scan!
       p "***** #{self.class} *****" if $debug
-      p __method__ if $debug
-      p self if $debug
+      p [self.class,__method__,__FILE__,__LINE__] if $debug
       p "***** addresses:" if $debug
       p addresses if $debug
+      p mode.name if $debug
       if @servers.empty?
         @servers = @addresses.map do |address|
           Server.new(address, @options).tap do |server|
-            subscribe_to(server, Event::SERVER_ADDED, Event::ServerAdded.new(self))
-            subscribe_to(server, Event::SERVER_REMOVED, Event::ServerRemoved.new(self))
+            unless mode == Mongo::Cluster::Mode::Standalone
+              subscribe_to(server, Event::SERVER_ADDED, Event::ServerAdded.new(self))
+              subscribe_to(server, Event::SERVER_REMOVED, Event::ServerRemoved.new(self))
+            end
           end
         end
       end
       p @servers if $debug
       system("gps") if $debug
       @servers.each do |server|
-        p self.class if $debug
-        p __method__ if $debug
+        p [self.class,__method__,__FILE__,__LINE__] if $debug
         p server if $debug
         p server.description if $debug
         begin
           server.check!
         rescue Exception => e
-          p self.class
-          p __method__
+          p [self.class,__method__,__FILE__,__LINE__]
           p e
+          raise e
         end
       end
     end
@@ -82,7 +100,11 @@ module Mongo
       class Standalone
 
         def self.servers(servers, name = nil)
-          servers.select{ |server| server.standalone? }
+          p [self.name,__method__,__FILE__,__LINE__] if $debug
+          p servers if $debug
+          raise "#{self.name}.#{__method__}: only one server expected, servers: #{servers.inspect}" if servers.size != 1
+          #servers.select{ |server| server.standalone? }
+          servers
         end
 
       end
@@ -99,14 +121,12 @@ module Mongo
           pp result if $debug
           return result, calculate_round_trip_time(start)
         rescue Mongo::SocketError, Errno::ECONNREFUSED, SystemCallError, IOError => e
-          p self.class if $debug
-          p __method__ if $debug
+          p [self.class,__method__,__FILE__,__LINE__] if $debug
           connection.disconnect!
           #log(:debug, 'MONGODB', [ e.message ])
           return {}, calculate_round_trip_time(start)
         rescue Exception => e
-          p self.class
-          p __method__
+          p [self.class,__method__,__FILE__,__LINE__]
           p "rescue Exception => e"
           p e
           raise e
@@ -120,9 +140,7 @@ module Mongo
         class ServerRemoved
 
           def self.run(description, updated)
-            p "***** self.run *****" if $debug
-            p self.class if $debug
-            p __method__ if $debug
+            p [self.name,__method__,__FILE__,__LINE__] if $debug
             if updated.config.empty?
               p "***** publish *****" if $debug
               p description if $debug
@@ -151,11 +169,13 @@ module Mongo
   class Database
 
     def command(operation)
-      p self.class if $debug
-      p __method__ if $debug
+      p [self.class,__method__,__FILE__,__LINE__] if $debug
       p client.cluster.servers if $debug
-      server = client.server_preference.select_servers(cluster.servers).first
+      server = (client.cluster.mode == Mongo::Cluster::Mode::Standalone) ?
+        cluster.servers.first :
+        client.server_preference.select_servers(cluster.servers).first
       p client.server_preference if $debug
+      p server if $debug
       raise Mongo::NoReadPreference.new("No replica set member available for query with read preference matching mode #{client.server_preference.name.to_s}") unless server
       Operation::Command.new({
         :selector => operation,
@@ -174,8 +194,7 @@ module Mongo
         def each
           tries = 0
           begin
-            p self.class if $debug
-            p __method__ if $debug
+            p [self.class,__method__,__FILE__,__LINE__] if $debug
             servers = cluster.servers
             p servers if $debug
             p read if $debug
@@ -189,7 +208,7 @@ module Mongo
             end if block_given?
             cursor
           rescue Mongo::NoMaster, Mongo::NoReadPreference, Mongo::SocketError, Errno::ECONNREFUSED => e
-            p __method__ if $debug
+            p [self.class,__method__,__FILE__,__LINE__] if $debug
             p e if $debug
             server.disconnect! if server
             tries += 1
@@ -199,7 +218,7 @@ module Mongo
             collection.cluster.scan!
             retry
           rescue Exception => e
-            p __method__
+            p [self.class,__method__,__FILE__,__LINE__]
             p e
             p "rescue Exception => e"
             raise e
@@ -249,6 +268,22 @@ module Mongo
         cluster.add(address)
       end
 
+    end
+  end
+
+  module Operation
+    class Command
+      def execute(context)
+        p [self.class,__method__,__FILE__,__LINE__] if $debug
+        # @todo: Should we respect tag sets and options here?
+        if $reroute
+          if context.server.secondary? && !secondary_ok?
+            warn "Database command '#{selector.keys.first}' rerouted to primary server"
+            context = Mongo::ServerPreference.get(:mode => :primary).server.context
+          end
+        end
+        execute_message(context)
+      end
     end
   end
 end

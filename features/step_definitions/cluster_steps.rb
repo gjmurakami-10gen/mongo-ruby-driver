@@ -137,7 +137,7 @@ def data_members(which = [:primary, :secondaries])
   topology_members = @secondaries.collect{|secondary| [secondary, :secondary]} if which.include?(:secondaries)
   topology_members << [@primary, :primary] if which.include?(:primary)
   client_members = topology_members.collect do |resource, member_type|
-    client = Mongo::Client.new(resource.object['mongodb_uri'] + '/admin', mode: :standalone)
+    client = Mongo::Client.new(resource.object['mongodb_uri'] + '/admin', mode: :standalone, read: {mode: Mongo::ServerPreference::Nearest})
     client.cluster.scan!
     [resource.object['uri'], {client: client, resource: resource, member_type: member_type}]
   end
@@ -151,7 +151,9 @@ end
 
 def get_server_status
   data_members_with_status = @data_members.each_pair.collect{|key, value|
-    server_status = value[:client].command({serverStatus: 1})
+    $reroute = false
+    server_status = value[:client].command({serverStatus: 1}).documents.first
+    $reroute = true
     #pp [value[:client].host_port, server_status]
     [key, value.dup.merge(server_status: server_status)]
   }
