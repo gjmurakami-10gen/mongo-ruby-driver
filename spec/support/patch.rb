@@ -54,15 +54,21 @@ module Mongo
     end
 
     def next_primary
-      primary = client.server_preference.primary(servers).first
+      p [self.class,__method__,__FILE__,__LINE__] if $debug
+      if client.cluster.mode == Mongo::Cluster::Mode::ReplicaSet
+        primary = client.server_preference.primary(servers).first
+      else
+        primary = servers.first
+      end
       raise Mongo::NoMaster.new("no master") unless primary
+      p primary if $debug
+      p primary.description if $debug
       primary
     end
 
     def scan!
-      p "***** #{self.class} *****" if $debug
       p [self.class,__method__,__FILE__,__LINE__] if $debug
-      p "***** addresses:" if $debug
+      p "***** #{__method__} *****" if $debug
       p addresses if $debug
       p mode.name if $debug
       if @servers.empty?
@@ -103,7 +109,6 @@ module Mongo
           p [self.name,__method__,__FILE__,__LINE__] if $debug
           p servers if $debug
           raise "#{self.name}.#{__method__}: only one server expected, servers: #{servers.inspect}" if servers.size != 1
-          #servers.select{ |server| server.standalone? }
           servers
         end
 
@@ -168,13 +173,16 @@ module Mongo
 
   class Database
 
-    def command(operation)
+    def command(operation, options = {})
       p [self.class,__method__,__FILE__,__LINE__] if $debug
-      p client.cluster.servers if $debug
-      server = (client.cluster.mode == Mongo::Cluster::Mode::Standalone) ?
-        cluster.servers.first :
-        client.server_preference.select_servers(cluster.servers).first
-      p client.server_preference if $debug
+      p cluster.servers if $debug
+      if client.cluster.mode == Mongo::Cluster::Mode::ReplicaSet
+        server_preference = options[:read] ? ServerPreference.get(options[:read]) : client.server_preference
+        p server_preference if $debug
+        server = server_preference.select_servers(cluster.servers).first
+      else
+        server = cluster.servers.first
+      end
       p server if $debug
       raise Mongo::NoReadPreference.new("No replica set member available for query with read preference matching mode #{client.server_preference.name.to_s}") unless server
       Operation::Command.new({
@@ -195,11 +203,14 @@ module Mongo
           tries = 0
           begin
             p [self.class,__method__,__FILE__,__LINE__] if $debug
-            servers = cluster.servers
-            p servers if $debug
-            p read if $debug
-            p read.select_servers(cluster.servers) if $debug
-            server = read.select_servers(cluster.servers).first
+            p cluster.servers if $debug
+            if client.cluster.mode == Mongo::Cluster::Mode::ReplicaSet
+              p read if $debug
+              p read.select_servers(cluster.servers) if $debug
+              server = read.select_servers(cluster.servers).first
+            else
+              server = cluster.servers.first
+            end
             p server if $debug
             raise Mongo::NoReadPreference.new("No replica set member available for query with read preference matching mode #{read.name.to_s}") unless server
             cursor = Cursor.new(view, send_initial_query(server), server).to_enum
@@ -207,6 +218,36 @@ module Mongo
               yield doc
             end if block_given?
             cursor
+          rescue Mongo::NoMaster, Mongo::NoReadPreference, Mongo::SocketError, Errno::ECONNREFUSED => e
+            p [self.class,__method__,__FILE__,__LINE__] if $debug
+            p e if $debug
+            server.disconnect! if server
+            tries += 1
+            raise e if tries > 3
+            sleep(2)
+            system("gps") if $debug
+            collection.cluster.scan!
+            retry
+          rescue Exception => e
+            p [self.class,__method__,__FILE__,__LINE__]
+            p e
+            p "rescue Exception => e"
+            raise e
+          end
+        end
+
+        def cursor
+          tries = 0
+          begin
+            p [self.class,__method__,__FILE__,__LINE__] if $debug
+            servers = cluster.servers
+            p servers if $debug
+            p read if $debug
+            p read.select_servers(cluster.servers) if $debug
+            server = read.select_servers(cluster.servers).first
+            p server if $debug
+            raise Mongo::NoReadPreference.new("No replica set member available for query with read preference matching mode #{read.name.to_s}") unless server
+            Cursor.new(view, send_initial_query(server), server).to_enum
           rescue Mongo::NoMaster, Mongo::NoReadPreference, Mongo::SocketError, Errno::ECONNREFUSED => e
             p [self.class,__method__,__FILE__,__LINE__] if $debug
             p e if $debug
@@ -285,5 +326,19 @@ module Mongo
         execute_message(context)
       end
     end
+
+    module Executable
+      def execute(context)
+        p [self.class,__method__,__FILE__,__LINE__] if $debug
+        p context.mongos? if $debug
+        unless context.primary? || context.standalone? || context.mongos? || secondary_ok?
+          raise Exception, "Must use primary server"
+        end
+        context.with_connection do |connection|
+          connection.dispatch([ message ])
+        end
+      end
+    end
   end
+
 end

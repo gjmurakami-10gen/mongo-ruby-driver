@@ -262,7 +262,7 @@ Given(/^a replica-set client with a seed from (?:a|the) (primary|secondary|arbit
 end
 
 Given(/^some documents written to all data\-bearing members$/) do
-  @coll.insert_one(TEST_DOCS, w: @n)
+  @coll.insert_many(TEST_DOCS, w: @n)
 end
 
 Given(/^some geo documents written to all data\-bearing members$/) do
@@ -379,7 +379,7 @@ end
 
 When(/^I query with read\-preference (\w+) and batch size (\d+)$/) do  |read_preference, batch_size|
   read_preference_sym = read_preference.downcase.to_sym
-  @cursor = @coll.find({}).read(mode: read_preference_sym).batch_size(batch_size)
+  @cursor = @coll.find({}).read(read_preference_sym).batch_size(batch_size).cursor
 end
 
 When(/^I get (\d+) docs$/) do |count|
