@@ -20,6 +20,8 @@ require 'rspec'
 require 'spec_helper'
 require 'support/patch'
 
+$debug = true unless defined? $debug
+
 TEST_DB = 'test' unless defined? TEST_DB
 TEST_COLL = 'test' unless defined? TEST_COLL
 TEST_COLL_OUT = 'test_out'
@@ -133,6 +135,7 @@ def result_response_command_with_read_preference(type, command, read_preference)
 end
 
 def data_members(which = [:primary, :secondaries])
+  p [self.class,__method__,__FILE__,__LINE__] if $debug
   topology_members = []
   topology_members = @secondaries.collect{|secondary| [secondary, :secondary]} if which.include?(:secondaries)
   topology_members << [@primary, :primary] if which.include?(:primary)
@@ -161,7 +164,10 @@ def get_server_status
 end
 
 def server_status_delta(status_type = 'opcounters')
+  p [self.class,__method__,__FILE__,__LINE__] if $debug
   @server_status_after = get_server_status
+  p @server_status_after.first.first if $debug
+  p @server_status_after.first.last[:client].cluster.servers.first.description if $debug
   status_type_delta = @server_status_after.each_pair.collect do |key, value|
     [key, value.merge(status_type => hash_delta(@server_status_before[key][:server_status][status_type], value[:server_status][status_type]))]
   end
@@ -172,7 +178,7 @@ def occurs_on(member_type, status_type = 'opcounters', op_type = 'query')
   delta = server_status_delta(status_type)
   threshold = STATUS_THRESHOLD[status_type][op_type]
   nodes = delta.each_pair.select{|key, value| (value[status_type][op_type] > threshold)}
-  expect(nodes.count).to eq(1)
+  expect(nodes.count).to eq(1) # failing here
   expect(nodes.first.last[:member_type]).to eq(member_type)
 end
 
