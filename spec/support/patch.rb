@@ -1,4 +1,4 @@
-$debug = false # true #
+$debug = true # false #
 $reroute = true
 
 module Mongo
