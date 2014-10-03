@@ -601,110 +601,194 @@ shared_examples 'a bulk write object' do
         end
       end
     end
+  end
 
-    context '#remove' do
+  context '#remove' do
 
-      context 'when find is not first specified' do
+    context 'when find is not first specified' do
 
-        it 'raises an exception' do
-          expect do
-            bulk.remove
-          end.to raise_exception
+      it 'raises an exception' do
+        expect do
+          bulk.remove
+        end.to raise_exception
+      end
+    end
+
+    context 'empty query selector' do
+
+      let(:docs) do
+        [ { a: 1 }, { a: 2 } ]
+      end
+
+      before do
+        authorized_collection.insert_many(docs)
+        bulk.find({}).remove
+      end
+
+      after do
+        authorized_collection.find.remove_many
+      end
+
+      it 'reports nRemoved correctly' do
+        expect(bulk.execute['nRemoved']).to eq(2)
+      end
+
+      it 'removes all documents' do
+        bulk.execute
+        expect(authorized_collection.find.to_a).to be_empty
+      end
+    end
+
+    context 'non-empty query selector' do
+
+      let(:docs) do
+        [ { a: 1 }, { a: 2 } ]
+      end
+
+      let(:expected) do
+        [ { 'a' => 2 } ]
+      end
+
+      before do
+        authorized_collection.insert_many(docs)
+        bulk.find(:a => 1).remove
+      end
+
+      after do
+        authorized_collection.find.remove_many
+      end
+
+      it 'reports nRemoved correctly' do
+        expect(bulk.execute['nRemoved']).to eq(1)
+      end
+
+      it 'removes only matching documents' do
+        bulk.execute
+        expect(authorized_collection.find.projection(_id: 0).to_a).to eq(expected)
+      end
+    end
+  end
+
+  context '#remove_one' do
+
+    context 'when find is not first specified' do
+
+      it 'raises an exception' do
+        expect do
+          bulk.remove_one
+        end.to raise_exception
+      end
+    end
+
+    context 'multiple matching documents' do
+
+      let(:docs) do
+        [ { a: 1 }, { a: 1 } ]
+      end
+
+       let(:expected) do
+        [ { 'a' => 1 } ]
+      end
+
+      before do
+        authorized_collection.insert_many(docs)
+        bulk.find(:a => 1).remove_one
+      end
+
+      after do
+        authorized_collection.find.remove_many
+      end
+
+      it 'reports nRemoved correctly' do
+        expect(bulk.execute['nRemoved']).to eq(1)
+      end
+
+      it 'removes only matching documents' do
+        bulk.execute
+        expect(authorized_collection.find.projection(_id: 0).to_a).to eq(expected)
+      end
+    end
+  end
+
+  context 're-running a batch' do
+
+    before do
+      bulk.insert(:a => 1)
+      bulk.execute
+    end
+
+    after do
+      authorized_collection.find.remove_many
+    end
+
+    it 'raises an exception' do
+      expect do
+        bulk.execute
+      end.to raise_exception
+    end
+  end
+
+  context 'empty batch' do
+
+    it 'raises an exception' do
+      expect do
+        bulk.execute
+      end.to raise_exception
+    end
+  end
+
+  context 'when batches exceed max batch size' do
+
+    context 'delete batch splitting' do
+
+      before do
+        3000.times do |i|
+          authorized_collection.insert_one(_id: i)
         end
       end
 
-      context 'empty query selector' do
-
-        let(:docs) do
-          [ { a: 1 }, { a: 2 } ]
-        end
-
-        before do
-          authorized_collection.insert_many(docs)
-          bulk.find({}).remove
-        end
-
-        after do
-          authorized_collection.find.remove_many
-        end
-
-        it 'reports nRemoved correctly' do
-          expect(bulk.execute['nRemoved']).to eq(2)
-        end
-
-        it 'removes all documents' do
-          bulk.execute
-          expect(authorized_collection.find.to_a).to be_empty
-        end
+      after do
+        authorized_collection.find.remove_many
       end
 
-      context 'non-empty query selector' do
-
-        let(:docs) do
-          [ { a: 1 }, { a: 2 } ]
-        end
-
-        let(:expected) do
-          [ { 'a' => 2 } ]
-        end
+      context 'operations exceed max batch size' do
 
         before do
-          authorized_collection.insert_many(docs)
-          bulk.find(:a => 1).remove
+          3000.times do |i|
+            bulk.find(_id: i).remove_one
+          end
         end
 
-        after do
-          authorized_collection.find.remove_many
-        end
-
-        it 'reports nRemoved correctly' do
-          expect(bulk.execute['nRemoved']).to eq(1)
-        end
-
-        it 'removes only matching documents' do
+        it 'completes all operations' do
           bulk.execute
-          expect(authorized_collection.find.projection(_id: 0).to_a).to eq(expected)
+          expect(authorized_collection.find.count).to eq(0)
         end
       end
     end
 
-    context '#remove_one' do
+    context 'update batch splitting' do
 
-      context 'when find is not first specified' do
-
-        it 'raises an exception' do
-          expect do
-            bulk.remove_one
-          end.to raise_exception
+      before do
+        3000.times do |i|
+          authorized_collection.insert_one(x: i)
         end
       end
 
-      context 'multiple matching documents' do
+      after do
+        authorized_collection.find.remove_many
+      end
 
-        let(:docs) do
-          [ { a: 1 }, { a: 1 } ]
-        end
-
-         let(:expected) do
-          [ { 'a' => 1 } ]
-        end
+      context 'operations exceed max batch size' do
 
         before do
-          authorized_collection.insert_many(docs)
-          bulk.find(:a => 1).remove_one
+          3000.times do |i|
+            bulk.find(x: i).update_one('$set' => { x: 6000-i })
+          end
         end
 
-        after do
-          authorized_collection.find.remove_many
-        end
-
-        it 'reports nRemoved correctly' do
-          expect(bulk.execute['nRemoved']).to eq(1)
-        end
-
-        it 'removes only matching documents' do
+        it 'completes all operations' do
           bulk.execute
-          expect(authorized_collection.find.projection(_id: 0).to_a).to eq(expected)
+          expect(authorized_collection.find(x: { '$gte' => 3000 }).count).to eq(3000)
         end
       end
     end
