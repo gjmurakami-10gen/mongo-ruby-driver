@@ -1,9 +1,9 @@
-$debug = true # false #
 $reroute = true
 
 module Mongo
   class Client
 
+    # pass options to create_from_uri for needed database
     def initialize(addresses_or_uri, options = {})
       if addresses_or_uri.is_a?(::String)
         create_from_uri(addresses_or_uri, options)
@@ -12,18 +12,21 @@ module Mongo
       end
     end
 
+    # options arg and usage fix
     def server_preference(options = {})
       @server_preference = (options.empty? && @server_preference) || ServerPreference.get(options)
     end
 
     private
 
+    # nit - use @options
     def create_from_addresses(addresses, options = {})
       @cluster = Cluster.new(self, addresses, options)
       @options = options.freeze
       @database = Database.new(self, @options[:database])
     end
 
+    # add missing options needed for database
     def create_from_uri(connection_string, options = {})
       uri = URI.new(connection_string)
       @cluster = Cluster.new(self, uri.servers, options)
@@ -37,8 +40,8 @@ module Mongo
 
   class Cluster
 
+    # client mode sensitive
     def initialize(client, addresses, options = {})
-      p [self.class,__method__,__FILE__,__LINE__] if $debug
       @client = client
       @addresses = addresses
       @options = options.freeze
@@ -53,24 +56,19 @@ module Mongo
       end
     end
 
+    # client mode sensitive
     def next_primary
-      p [self.class,__method__,__FILE__,__LINE__] if $debug
       if client.cluster.mode == Mongo::Cluster::Mode::ReplicaSet
         primary = client.server_preference.primary(servers).first
       else
         primary = servers.first
       end
       raise Mongo::NoMaster.new("no master") unless primary
-      p primary if $debug
-      p primary.description if $debug
       primary
     end
 
+    # hack to add servers for code that is not sensitive to client mode
     def scan!
-      p [self.class,__method__,__FILE__,__LINE__] if $debug
-      p "***** #{__method__} *****" if $debug
-      p addresses if $debug
-      p mode.name if $debug
       if @servers.empty?
         @servers = @addresses.map do |address|
           Server.new(address, @options).tap do |server|
@@ -81,12 +79,7 @@ module Mongo
           end
         end
       end
-      p @servers if $debug
-      system("gps") if $debug
       @servers.each do |server|
-        p [self.class,__method__,__FILE__,__LINE__] if $debug
-        p server if $debug
-        p server.description if $debug
         begin
           server.check!
         rescue Exception => e
@@ -97,17 +90,18 @@ module Mongo
       end
     end
 
+    # rejecting addresses causes a discovery problem with code this not sensitive to client mode
     def remove(address)
       removed_servers = @servers.reject!{ |server| server.address.seed == address }
       removed_servers.each{ |server| server.disconnect! } if removed_servers
+      #addresses.reject!{ |addr| addr == address }
     end
 
     module Mode
       class Standalone
 
+        # explicit check as code that is not client-mode sensitive adds unwanted servers
         def self.servers(servers, name = nil)
-          p [self.name,__method__,__FILE__,__LINE__] if $debug
-          p servers if $debug
           raise "#{self.name}.#{__method__}: only one server expected, servers: #{servers.inspect}" if servers.size != 1
           servers
         end
@@ -119,20 +113,18 @@ module Mongo
   class Server
     class Monitor
 
+      # rescue more exceptions and disconnect
       def ismaster
         start = Time.now
         begin
           result = connection.dispatch([ ISMASTER ]).documents[0]
-          pp result if $debug
           return result, calculate_round_trip_time(start)
         rescue Mongo::SocketError, Errno::ECONNREFUSED, SystemCallError, IOError => e
-          p [self.class,__method__,__FILE__,__LINE__] if $debug
           connection.disconnect!
           #log(:debug, 'MONGODB', [ e.message ])
           return {}, calculate_round_trip_time(start)
         rescue Exception => e
           p [self.class,__method__,__FILE__,__LINE__]
-          p "rescue Exception => e"
           p e
           raise e
         end
@@ -144,12 +136,9 @@ module Mongo
       module Inspection
         class ServerRemoved
 
+          # no bug - but may want to remove server if it is correctly added by discovery that is mode sensitive
           def self.run(description, updated)
-            p [self.name,__method__,__FILE__,__LINE__] if $debug
             if updated.config.empty?
-              p "***** publish *****" if $debug
-              p description if $debug
-              p updated.server.address.seed if $debug
               # currently there's an issue with removing a server here
               #description.server.publish(Event::SERVER_REMOVED, updated.server.address.seed)
             end
@@ -173,17 +162,14 @@ module Mongo
 
   class Database
 
+    # client mode sensitive
     def command(operation, options = {})
-      p [self.class,__method__,__FILE__,__LINE__] if $debug
-      p cluster.servers if $debug
       if client.cluster.mode == Mongo::Cluster::Mode::ReplicaSet
         server_preference = options[:read] ? ServerPreference.get(options[:read]) : client.server_preference
-        p server_preference if $debug
         server = server_preference.select_servers(cluster.servers).first
       else
         server = cluster.servers.first
       end
-      p server if $debug
       raise Mongo::NoReadPreference.new("No replica set member available for query with read preference matching mode #{client.server_preference.name.to_s}") unless server
       Operation::Command.new({
         :selector => operation,
@@ -199,19 +185,15 @@ module Mongo
 
       module Iterable
 
+        # client mode sensitive and behavior for retries and disconnect on error
         def each
           tries = 0
           begin
-            p [self.class,__method__,__FILE__,__LINE__] if $debug
-            p cluster.servers if $debug
             if client.cluster.mode == Mongo::Cluster::Mode::ReplicaSet
-              p read if $debug
-              p read.select_servers(cluster.servers) if $debug
               server = read.select_servers(cluster.servers).first
             else
               server = cluster.servers.first
             end
-            p server if $debug
             raise Mongo::NoReadPreference.new("No replica set member available for query with read preference matching mode #{read.name.to_s}") unless server
             cursor = Cursor.new(view, send_initial_query(server), server).to_enum
             cursor.each do |doc|
@@ -219,49 +201,36 @@ module Mongo
             end if block_given?
             cursor
           rescue Mongo::NoMaster, Mongo::NoReadPreference, Mongo::SocketError, Errno::ECONNREFUSED => e
-            p [self.class,__method__,__FILE__,__LINE__] if $debug
-            p e if $debug
             server.disconnect! if server
             tries += 1
             raise e if tries > 3
             sleep(2)
-            system("gps") if $debug
             collection.cluster.scan!
             retry
           rescue Exception => e
             p [self.class,__method__,__FILE__,__LINE__]
             p e
-            p "rescue Exception => e"
             raise e
           end
         end
 
+        # no bug - attempt to provide an enumerable for individual calls to #next
         def cursor
           tries = 0
           begin
-            p [self.class,__method__,__FILE__,__LINE__] if $debug
-            servers = cluster.servers
-            p servers if $debug
-            p read if $debug
-            p read.select_servers(cluster.servers) if $debug
             server = read.select_servers(cluster.servers).first
-            p server if $debug
             raise Mongo::NoReadPreference.new("No replica set member available for query with read preference matching mode #{read.name.to_s}") unless server
             Cursor.new(view, send_initial_query(server), server).to_enum
           rescue Mongo::NoMaster, Mongo::NoReadPreference, Mongo::SocketError, Errno::ECONNREFUSED => e
-            p [self.class,__method__,__FILE__,__LINE__] if $debug
-            p e if $debug
             server.disconnect! if server
             tries += 1
             raise e if tries > 3
             sleep(2)
-            system("gps") if $debug
             collection.cluster.scan!
             retry
           rescue Exception => e
             p [self.class,__method__,__FILE__,__LINE__]
             p e
-            p "rescue Exception => e"
             raise e
           end
         end
@@ -270,6 +239,7 @@ module Mongo
 
       module Readable
 
+        # call Client#server_preference to set it
         def read(value = nil)
           return server_preference if value.nil?
           view = configure(:mode, value)
@@ -277,7 +247,8 @@ module Mongo
           view
         end
 
-        def get_one # convenience, no bug
+        # no bug - convenience
+        def get_one
           limit(1).to_a.first
         end
 
@@ -288,6 +259,7 @@ module Mongo
 
   class Connection
 
+    # add rescue so I can disconnect
     def dispatch(messages)
       begin
         write(messages)
@@ -304,6 +276,7 @@ module Mongo
     class ServerAdded
       include Loggable
 
+      # log message added to be symmetric with ServerRemoved
       def handle(address)
         log(:debug, 'MONGODB', [ "#{address} being added to the cluster." ])
         cluster.add(address)
@@ -314,8 +287,9 @@ module Mongo
 
   module Operation
     class Command
+
+      # global $reroute is just a hack to bypass rerouting for a client with mode standalone
       def execute(context)
-        p [self.class,__method__,__FILE__,__LINE__] if $debug
         # @todo: Should we respect tag sets and options here?
         if $reroute
           if context.server.secondary? && !secondary_ok?
@@ -327,10 +301,9 @@ module Mongo
       end
     end
 
+    # added context.mongos?
     module Executable
       def execute(context)
-        p [self.class,__method__,__FILE__,__LINE__] if $debug
-        p context.mongos? if $debug
         unless context.primary? || context.standalone? || context.mongos? || secondary_ok?
           raise Exception, "Must use primary server"
         end
