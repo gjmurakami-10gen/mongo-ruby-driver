@@ -1,9 +1,12 @@
 $reroute = true
 
+# RUBY-814 - RUBY-822 - 9 issues filed so far
+
 module Mongo
   class Client
 
-    # pass options to create_from_uri for needed database
+    # RUBY-816 - client options lost when creating with URI
+    # RUBY-822 - replica set created from URI does not instantiate cluster mode for replica set
     def initialize(addresses_or_uri, options = {})
       if addresses_or_uri.is_a?(::String)
         create_from_uri(addresses_or_uri, options)
@@ -19,18 +22,18 @@ module Mongo
 
     private
 
-    # nit - use @options
+    # nit - use @options for consistency with create_from_uri
     def create_from_addresses(addresses, options = {})
-      @cluster = Cluster.new(self, addresses, options)
       @options = options.freeze
+      @cluster = Cluster.new(self, addresses, @options)
       @database = Database.new(self, @options[:database])
     end
 
-    # add missing options needed for database
+    # RUBY-815 - replica set uri sets wrong cluster mode
     def create_from_uri(connection_string, options = {})
       uri = URI.new(connection_string)
-      @cluster = Cluster.new(self, uri.servers, options)
       @options = options.merge(uri.client_options).freeze
+      @cluster = Cluster.new(self, uri.servers, @options)
       @database = Database.new(self, @options[:database])
     end
 
@@ -40,7 +43,7 @@ module Mongo
 
   class Cluster
 
-    # client mode sensitive
+    # RUBY-818 - standalone server removed from cluster and not added back
     def initialize(client, addresses, options = {})
       @client = client
       @addresses = addresses
@@ -56,7 +59,7 @@ module Mongo
       end
     end
 
-    # client mode sensitive
+    # RUBY-820 - cluster next_primary method returns nil with empty standalone config
     def next_primary
       if client.cluster.mode == Mongo::Cluster::Mode::ReplicaSet
         primary = client.server_preference.primary(servers).first
@@ -90,7 +93,7 @@ module Mongo
       end
     end
 
-    # rejecting addresses causes a discovery problem with code this not sensitive to client mode
+    # RUBY-817 - servers removed from cluster and not added back
     def remove(address)
       removed_servers = @servers.reject!{ |server| server.address.seed == address }
       removed_servers.each{ |server| server.disconnect! } if removed_servers
@@ -100,7 +103,7 @@ module Mongo
     module Mode
       class Standalone
 
-        # explicit check as code that is not client-mode sensitive adds unwanted servers
+        # RUBY-819 - cluster mode standalone servers erroneously returns array containing nil
         def self.servers(servers, name = nil)
           raise "#{self.name}.#{__method__}: only one server expected, servers: #{servers.inspect}" if servers.size != 1
           servers
@@ -113,7 +116,7 @@ module Mongo
   class Server
     class Monitor
 
-      # rescue more exceptions and disconnect
+      # RUBY-821 - server monitor ismaster method fails to disconnect and fails to rescue all relevant errors
       def ismaster
         start = Time.now
         begin
@@ -121,11 +124,9 @@ module Mongo
           return result, calculate_round_trip_time(start)
         rescue Mongo::SocketError, Errno::ECONNREFUSED, SystemCallError, IOError => e
           connection.disconnect!
-          #log(:debug, 'MONGODB', [ e.message ])
           return {}, calculate_round_trip_time(start)
         rescue Exception => e
-          p [self.class,__method__,__FILE__,__LINE__]
-          p e
+          log(:debug, 'MONGODB', [ "ismaster - unexpected exception #{e} #{e.message}" ])
           raise e
         end
       end
