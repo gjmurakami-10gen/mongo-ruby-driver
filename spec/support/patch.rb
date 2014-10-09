@@ -15,9 +15,11 @@ module Mongo
       end
     end
 
+    # revert this, instead review read preference for command
     # options arg and usage fix
     def server_preference(options = {})
-      @server_preference = (options.empty? && @server_preference) || ServerPreference.get(options)
+      @server_preference ||= ServerPreference.get(@options[:read] || {})
+      options.empty? ? @server_preference : ServerPreference.get(options)
     end
 
     private
@@ -167,7 +169,7 @@ module Mongo
     def command(operation, options = {})
       if client.cluster.mode == Mongo::Cluster::Mode::ReplicaSet
         server_preference = options[:read] ? ServerPreference.get(options[:read]) : client.server_preference
-        server = server_preference.select_servers(cluster.servers).first
+        server = server_preference(options).select_servers(cluster.servers).first
       else
         server = cluster.servers.first
       end
@@ -240,7 +242,7 @@ module Mongo
 
       module Readable
 
-        # call Client#server_preference to set it
+        # revert - call Client#server_preference to set it
         def read(value = nil)
           return server_preference if value.nil?
           view = configure(:mode, value)
