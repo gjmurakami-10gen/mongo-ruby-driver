@@ -117,11 +117,7 @@ begin
   pp client.command({dbStats: 1})
 rescue Exception => e
   p e
-  # #<NoMethodError: undefined method `context' for nil:NilClass>
   pp e.backtrace
-  # ["/Users/gjm/10gen/mongo-ruby-driver/lib/mongo/collection.rb:177:in `insert_many'",
-  #  "/Users/gjm/10gen/mongo-ruby-driver/lib/mongo/collection.rb:156:in `insert_one'",
-  #  "ruby-820-cluster-next-primary.rb:70:in `<main>'"]
 end
 
 topology.destroy

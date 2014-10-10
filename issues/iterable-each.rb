@@ -102,26 +102,22 @@ topology = mo.configure(configuration)
 topology.reset
 
 begin
-  mongodb_uri = topology.object['mongodb_uri'].sub(%r{/\?}, "/test?")
-  p mongodb_uri
-  client = Mongo::Client.new(mongodb_uri, mode: :replica_set)
-  pp client.cluster
-  client.cluster.scan!
-  pp client.command({dbStats: 1}, read: {mode: :primary})
-  puts
+  # mongodb_uri = topology.object['mongodb_uri'].sub(%r{/\?}, "/test?")
+  # p mongodb_uri
+  # client = Mongo::Client.new(mongodb_uri, mode: :replica_set)
+  # pp client.cluster
+  # client.cluster.scan!
+  # pp client.command({dbStats: 1}, read: {mode: :primary})
+  # puts
   mongodb_uri_primary = topology.primary.object['mongodb_uri'] + "/test"
   p mongodb_uri_primary
   client = Mongo::Client.new(mongodb_uri_primary)
   pp client.cluster
   client.cluster.scan!
-  pp client.command({dbStats: 1})
+  pp client['test'].find({"a" => 1}).to_a
 rescue Exception => e
   p e
-  # #<NoMethodError: undefined method `context' for nil:NilClass>
   pp e.backtrace
-  # ["/Users/gjm/10gen/mongo-ruby-driver/lib/mongo/collection.rb:177:in `insert_many'",
-  #  "/Users/gjm/10gen/mongo-ruby-driver/lib/mongo/collection.rb:156:in `insert_one'",
-  #  "ruby-820-cluster-next-primary.rb:70:in `<main>'"]
 end
 
 topology.destroy

@@ -1,6 +1,6 @@
 $reroute = true
 
-# RUBY-814 - RUBY-822 - 9 issues filed so far
+# RUBY-814 - RUBY-830 - 17 issues filed so far
 
 module Mongo
   class Client
@@ -13,13 +13,6 @@ module Mongo
       else
         create_from_addresses(addresses_or_uri, options)
       end
-    end
-
-    # revert this, instead review read preference for command
-    # options arg and usage fix
-    def server_preference(options = {})
-      @server_preference ||= ServerPreference.get(@options[:read] || {})
-      options.empty? ? @server_preference : ServerPreference.get(options)
     end
 
     private
@@ -165,14 +158,10 @@ module Mongo
 
   class Database
 
-    # client mode sensitive
+    # RUBY-823 - Database#command method lacks options for read preference and tags
     def command(operation, options = {})
-      if client.cluster.mode == Mongo::Cluster::Mode::ReplicaSet
-        server_preference = options[:read] ? ServerPreference.get(options[:read]) : client.server_preference
-        server = server_preference(options).select_servers(cluster.servers).first
-      else
-        server = cluster.servers.first
-      end
+      server_preference = options[:read] ? ServerPreference.get(options[:read]) : client.server_preference
+      server = server_preference.select_servers(cluster.servers).first
       raise Mongo::NoReadPreference.new("No replica set member available for query with read preference matching mode #{client.server_preference.name.to_s}") unless server
       Operation::Command.new({
         :selector => operation,
@@ -188,6 +177,8 @@ module Mongo
 
       module Iterable
 
+        # RUBY-824 - disconnect! when an error occurs in Collection::View::Iterable#each
+        # RUBY-830 - Retries for a query
         # client mode sensitive and behavior for retries and disconnect on error
         def each
           tries = 0
@@ -217,6 +208,7 @@ module Mongo
           end
         end
 
+        # RUBY-829 - enumerable cursor with next method
         # no bug - attempt to provide an enumerable for individual calls to #next
         def cursor
           tries = 0
@@ -242,14 +234,6 @@ module Mongo
 
       module Readable
 
-        # revert - call Client#server_preference to set it
-        def read(value = nil)
-          return server_preference if value.nil?
-          view = configure(:mode, value)
-          server_preference(view.options)
-          view
-        end
-
         # no bug - convenience
         def get_one
           limit(1).to_a.first
@@ -262,7 +246,7 @@ module Mongo
 
   class Connection
 
-    # add rescue so I can disconnect
+    # RUBY-825 - disconnect! when a socket error occurs in Connection#dispatch
     def dispatch(messages)
       begin
         write(messages)
@@ -279,6 +263,7 @@ module Mongo
     class ServerAdded
       include Loggable
 
+      # RUBY-826 - log adding a server to the cluster
       # log message added to be symmetric with ServerRemoved
       def handle(address)
         log(:debug, 'MONGODB', [ "#{address} being added to the cluster." ])
@@ -291,6 +276,7 @@ module Mongo
   module Operation
     class Command
 
+      # RUBY-827 - standalone client should not reroute
       # global $reroute is just a hack to bypass rerouting for a client with mode standalone
       def execute(context)
         # @todo: Should we respect tag sets and options here?
@@ -304,6 +290,7 @@ module Mongo
       end
     end
 
+    # RUBY-828 - Operation::Executable#execute raises exception for mongos
     # added context.mongos?
     module Executable
       def execute(context)
